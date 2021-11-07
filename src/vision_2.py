@@ -10,74 +10,121 @@ from sensor_msgs.msg import Image
 from std_msgs.msg    import Float64MultiArray
 from cv_bridge       import CvBridge
 
+# replace 0 with arbitrarily small value
+def zero_guard(val):
+    # replace 0 by this small amount to prevent division by zero
+    zero_guard_val = 0.001
+    return zero_guard_val if val == 0 else val
+
+class Joint:
+    # colour range for opencv binary thresholding
+    def __init__(self, colour_name, colour_range):
+        self.x = 0
+        self.y = 0
+        self.z = 0
+        self.angle = 0
+        self.colour_name = colour_name
+        self.colour_range = colour_range
+
 class vision_2:
     def __init__(self):
+        # set up ros nodes/pubs/subs etc.
         rospy.init_node("vision_2", anonymous=True)
-        self.image_2_sub      = rospy.Subscriber('image_topic2', Image, self.callback)
+        self.image_1_sub      = rospy.Subscriber('/camera1/robot/image_raw', Image, self.callback_1)
+        self.image_2_sub      = rospy.Subscriber('/camera2/robot/image_raw', Image, self.callback_2)
         self.joints_est_2_pub = rospy.Publisher("joints_est_2", Float64MultiArray, queue_size=10)
+        self.bridge = CvBridge()
 
-    def callback(self, data):
-        # read image
-        cv_image = CvBridge().imgmsg_to_cv2(data, "bgr8")
-        
-        
-        #kernel = np.array([ # for more control later
+        # set up kernel and etc. for blob detection
+        #self.kernel = np.array([ # for more control later
         #    [0, 0, 1, 0, 0],
         #    [0, 1, 1, 1, 0],
         #    [1, 1, 1, 1, 1],
         #    [0, 1, 1, 1, 0],
         #    [0, 0, 1, 0, 0]
         #], np.uint8)
-        kernel    = np.full((5, 5), 1, np.uint8)
-        no_iter   = 3
-        no_joints = 5 #"including end-effector", which is normally excluded, so really this is off by 1
-        no_links  = no_joints - 1 # this is not off by one but does not include "0m link from ground"
+        self.kernel    = np.full((5, 5), 1, np.uint8)
+        self.no_iter   = 3
+        self.no_joints = 5 #"including end-effector", so off by 1
+        self.no_links  = self.no_joints - 1 # not off by one, does not include "0m link from ground"
+
+        # consider blob blocked (e.g. by link) if its area m00 is below this threshold
+        self.obstruct_thres = 50
+
+        # declare joints and their (range of) colours (for opencv thresholding)
+        self.green = Joint('green',  [(0, 100, 0),   (10, 255, 10)])
+        self.yel1  = Joint('yellow', [(0, 100, 100), (0, 255, 255)])
+        self.yel2  = Joint('yellow', [(0, 100, 100), (0, 255, 255)])
+        self.blue  = Joint('blue',   [(100, 0, 0),   (255, 0, 0) ])
+        self.red   = Joint('red',    [(0, 0, 100),   (10, 10, 255)])
+        self.joints = [self.green, self.yel1, self.yel2, self.blue, self.red]
+
+    # handle images seen from the camera facing the yz-plane
+    def callback_1(self, data):
+        self.detect_centres(data, 1)
+        # calculate angles via trigonometry and linear algebra
+        # TODO: fix accuracy ... somehow
+        self.yel2.angle = np.arctan2(
+            # i have no idea why this doesn't work #-np.sqrt((self.blue.x - self.yel2.x)**2 + (self.blue.y - self.yel2.y)**2), 
+            (self.blue.y - self.yel2.y),
+            self.blue.z - self.yel2.z
+        )
+
+        # TODO: multiply by sign of sin(yel2.angle) to improve accuracy once occilation solved
+        self.green.angle = np.arctan2(
+            (self.blue.x - self.yel2.x),
+            (self.blue.y - self.yel2.y)
+        )
+
+        self.publish_angles()
+
+    # handle images seen from the camera facing the xz-plane
+    def callback_2(self, data):
+        self.detect_centres(data, 2)
+        # calculate cos and sin of blue joint from dot and cross proucts of links (as vectors)
+        link_3 = np.array([self.blue.x - self.yel1.x, self.blue.y - self.yel1.y, self.blue.z - self.yel1.z])
+        link_4 = np.array([self.red.x - self.blue.x, self.red.y - self.blue.y, self.red.z - self.blue.z])
+        link_norm_prod = zero_guard(np.linalg.norm(link_3) * np.linalg.norm(link_4))
+
+        cos_blue = np.dot(link_3, link_4) / link_norm_prod
+        sin_blue = np.linalg.norm(np.cross(link_3, link_4)) / link_norm_prod
+        # taking the norm eliminates sign, so need to re-derive it
+        self.blue.angle = np.arctan2(np.sign(self.yel2.angle)*sin_blue, cos_blue)
+
+        self.publish_angles()
+
+    def detect_centres(self, data, camera):
+        # read image
+        cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         
         # highlight blobs
-        joints_colours = [
-            [(0, 100, 0),   (10, 255, 10)],
-            [(0, 100, 100), (0, 255, 255)],
-            [(0, 100, 100), (0, 255, 255)],
-            [(100, 0, 0),   (255, 0, 0) ],
-            [(0, 0, 100),   (10, 10, 255)]
-        ]
-        joints_colours_names = ['green', 'yellow1', 'yellow2', 'blue', 'red'] # you're welcome
-        
         joints_images = [
             cv2.dilate(
-                cv2.inRange(cv_image, joints_colours[i][0], joints_colours[i][1]),
-                kernel, iterations=no_iter
+                cv2.inRange(cv_image, j.colour_range[0], j.colour_range[1]),
+                self.kernel, iterations=self.no_iter
             )
-        
-            for i in range(no_joints)
+            for j in self.joints
         ]
-        #links_images   = [cv2.imread("link%i.png" % i, 0) for i in [1, 2, 3]]
-        
         # pull moments
         moments = [cv2.moments(img) for img in joints_images]
-        
-        # replace 0 by this small amount to prevent division by zero
-        zero_guard = 0.0000001
 
-        # get centres
-        joints_centres = np.array([
-            (
-                int(moments[i]['m10'] / (moments[i]['m00'] if moments[i]['m00'] != 0 else zero_guard)), 
-                int(moments[i]['m01'] / (moments[i]['m00'] if moments[i]['m00'] != 0 else zero_guard))
-            )
-            for i in range(no_joints)
-        ])
-        
-        # calculate angles via trigonometry
-        joints_angles = [0] * (no_joints - 1)
-        for i in range(no_joints - 1):
-            joints_angles[i] = np.arctan2(
-                joints_centres[i][0] - joints_centres[i+1][0],
-                joints_centres[i][1] - joints_centres[i+1][1]
-            ) - sum(joints_angles[:i])
+        # update centres, using previous pos. if obscured
+        for i in range(self.no_joints):
+            area       = moments[i]['m00']
+            if area < self.obstruct_thres:
+                continue
+            vertical   = int(moments[i]['m01'] / zero_guard(area))
+            horizontal = int(moments[i]['m10'] / zero_guard(area))
+            
+            self.joints[i].z     = vertical
+            if camera == 1:
+                self.joints[i].y = horizontal
+            else:
+                self.joints[i].x = horizontal
 
+    def publish_angles(self):
         joints_est = Float64MultiArray()
-        joints_est.data = joints_angles
+        joints_est.data = [self.green.angle, self.yel1.angle, self.yel2.angle, self.blue.angle]
         self.joints_est_2_pub.publish(joints_est)
 
 def main(args):

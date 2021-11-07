@@ -20,7 +20,7 @@ def sin_movements_2():
     pub_str = '/robot/joint%i_position_controller/command'
 
     # initialize node and publishers to joint angles
-    rospy.init_node('sin_movements_1', anonymous=True)
+    rospy.init_node('sin_movements_2', anonymous=True)
     joint1_pub = rospy.Publisher(pub_str % 1 , Float64, queue_size=10)
     joint3_pub = rospy.Publisher(pub_str % 3 , Float64, queue_size=10)
     joint4_pub = rospy.Publisher(pub_str % 4 , Float64, queue_size=10)
