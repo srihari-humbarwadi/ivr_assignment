@@ -26,6 +26,15 @@ class Joint:
         self.colour_name = colour_name
         self.colour_range = colour_range
 
+    def copy(self):
+        copy = Joint(self.colour_name, self.colour_range)
+        copy.x     = self.x
+        copy.y     = self.y
+        copy.z     = self.z
+        copy.angle = self.angle
+
+        return copy
+
 class vision_1:
     def __init__(self):
         # set up ros nodes/pubs/subs etc.
@@ -49,7 +58,7 @@ class vision_1:
         self.no_links  = self.no_joints - 1 # not off by one, does not include "0m link from ground"
 
         # consider blob blocked (e.g. by link) if its area m00 is below this threshold
-        self.obstruct_thres = 50
+        self.obstruct_thres = 1000
 
         # declare joints and their (range of) colours (for opencv thresholding)
         self.green = Joint('green',  [(0, 100, 0),   (10, 255, 10)])
@@ -59,6 +68,19 @@ class vision_1:
         self.red   = Joint('red',    [(0, 0, 100),   (10, 10, 255)])
         self.joints = [self.green, self.yel1, self.yel2, self.blue, self.red] #index 1-off from pdf
 
+        # keep old copies of joint positions to estimate when blobs are obstructed
+        joints_copy = [j.copy() for j in self.joints]
+        self.avg_window_size = 5 # includes latest measurement not in prev_joints
+        self.prev_joints = [joints_copy] * (self.avg_window_size - 1)
+
+        # averages of the states of joints over the copies of joints
+        self.avg_green  = self.green.copy()
+        self.avg_yel1   = self.yel1.copy()
+        self.avg_yel2   = self.yel2.copy()
+        self.avg_blue   = self.blue.copy()
+        self.avg_red    = self.red.copy()
+        self.avg_joints = [self.avg_green, self.avg_yel1, self.avg_yel2, self.avg_blue, self.avg_red]
+
 
 
     # handle images seen from the camera facing the yz-plane
@@ -67,8 +89,8 @@ class vision_1:
         # calculate angles via trigonometry and linear algebra
         # accuracy can be improved, but problems with oscillations due to obstruction
         self.yel2.angle = np.arctan2(
-            self.yel2.y - self.blue.y,
-            (self.yel2.z - self.blue.z) #/ zero_guard(np.cos(self.yel1.angle))
+            self.avg_yel2.y - self.avg_blue.y,
+            (self.avg_yel2.z - self.avg_blue.z) #/ zero_guard(np.cos(self.yel1.angle))
         )
         self.publish_angles()
 
@@ -80,13 +102,14 @@ class vision_1:
         # line below makes signs accurate but problems with oscillations when joints_angles[2] fluctuates fast
         #cosj2_sign = np.sign(zero_guard(np.cos(self.joints_angles[2])))
         self.yel1.angle = np.arctan2( #negated because y axis points away from screen
-            -(self.yel1.x - self.blue.x), #* cosj2_sign,
-            (self.yel1.z - self.blue.z)   #* cosj2_sign
+            -(self.avg_yel1.x - self.avg_blue.x), #* cosj2_sign,
+            (self.avg_yel1.z - self.avg_blue.z)   #* cosj2_sign
         )
 
+        # TODO: sign is still wrong at times
         # calculate cos and sin of blue joint from dot and cross proucts of links (as vectors)
-        link_3 = np.array([self.blue.x - self.yel1.x, self.blue.y - self.yel1.y, self.blue.z - self.yel1.z])
-        link_4 = np.array([self.red.x - self.blue.x, self.red.y - self.blue.y, self.red.z - self.blue.z])
+        link_3 = np.array([self.avg_blue.x - self.avg_yel1.x, self.avg_blue.y - self.avg_yel1.y, self.avg_blue.z - self.avg_yel1.z])
+        link_4 = np.array([self.avg_red.x - self.avg_blue.x, self.avg_red.y - self.avg_blue.y, self.avg_red.z - self.avg_blue.z])
         link_norm_prod = zero_guard(np.linalg.norm(link_3) * np.linalg.norm(link_4))
 
         cos_blue = np.dot(link_3, link_4) / link_norm_prod
@@ -112,18 +135,39 @@ class vision_1:
         moments = [cv2.moments(img) for img in joints_images]
 
         # update centres, using previous pos. if obscured
+        copies = [j.copy() for j in self.joints]
         for i in range(self.no_joints):
             area       = moments[i]['m00']
             if area < self.obstruct_thres:
                 continue
             vertical   = int(moments[i]['m01'] / zero_guard(area))
             horizontal = int(moments[i]['m10'] / zero_guard(area))
-            
+
             self.joints[i].z     = vertical
             if camera == 1:
                 self.joints[i].y = horizontal
             else:
                 self.joints[i].x = horizontal
+        self.prev_joints.pop()
+        self.prev_joints.insert(0, copies)
+
+        # update averages of joints
+        for i in range(self.no_joints):
+            total_x     = self.joints[i].x
+            total_y     = self.joints[i].y
+            total_z     = self.joints[i].z
+            total_angle = self.joints[i].angle
+            for js in self.prev_joints:
+                total_x     += js[i].x
+                total_y     += js[i].y
+                total_z     += js[i].z
+                total_angle += js[i].angle
+            self.avg_joints[i].x     = total_x     / self.avg_window_size
+            self.avg_joints[i].y     = total_y     / self.avg_window_size
+            self.avg_joints[i].z     = total_z     / self.avg_window_size
+            self.avg_joints[i].angle = total_angle / self.avg_window_size
+            
+
 
     def publish_angles(self):
         joints_est = Float64MultiArray()
