@@ -166,7 +166,7 @@ class vision_1:
 
         self.publish_angles()
 
-    def detect_centres(self, data, camera, dump_frames=True, output_dir='test'):
+    def detect_centres(self, data, camera, dump_frames=True, output_dir='frames'):
         # read image
         cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
 
