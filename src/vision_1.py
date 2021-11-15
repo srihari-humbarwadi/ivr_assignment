@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # estimate the positions of joints, as described in 'Joint state estimation - I' in the IVR assignment pdf
-
+import os
 import sys
 import rospy
 import cv2
@@ -112,6 +112,10 @@ class vision_1:
         # number of angles to use in approximation (should not be greater than saved_state_window_size)
         self.approx_angle_window_size = 50
 
+
+        # keep a count of updates
+        self._updates = {'camera_1': 0, 'camera_2': 0}
+
     # handle images seen from the camera facing the yz-plane
     def callback_1(self, data):
         self.detect_centres(data, 1)
@@ -162,10 +166,22 @@ class vision_1:
 
         self.publish_angles()
 
-    def detect_centres(self, data, camera):
+    def detect_centres(self, data, camera, dump_frames=True, output_dir='test'):
         # read image
         cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+
+        if dump_frames:
+            frame_count = self._updates['camera_{}'.format(camera)]
+            
+            if not os.path.exists(os.path.join(output_dir, str(camera))):
+                os.makedirs(os.path.join(output_dir, str(camera)))
+
+            frame_path = os.path.join(output_dir, str(
+                camera), 'frame_{}.png'.format(frame_count))
+            cv2.imwrite(frame_path, cv_image)
         
+        self._updates['camera_{}'.format(camera)] += 1
+
         # highlight blobs
         joints_images = [
             cv2.dilate(
