@@ -10,16 +10,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg    import Float64MultiArray
 from cv_bridge       import CvBridge
 
-
-# clip angles so they're between -pi/2, pi/2
-def clip(angle):
-    return max(-np.pi/2, min(np.pi/2, angle))
-
-# replace 0 with arbitrarily small value
-def zero_guard(val):
-    # replace 0 by this small amount to prevent division by zero
-    zero_guard_val = 0.001
-    return zero_guard_val if val == 0 else val
+def near_zero(val):
+    return abs(val) < 0.3
 
 # approximate using Langrange interpolation
 def approximate_with_data(ys):
@@ -32,6 +24,27 @@ def approximate_with_data(ys):
                 np.product([i - j for j in range(total_points) if j != i])
         return total
     return approximator
+
+class Link:
+    # model the link as a vector from joint1 to joint2
+    def __init__(self, joint_1, joint_2):
+        self.joint_1 = joint_1
+        self.joint_2 = joint_2
+
+    def get_x(self):
+        return self.joint_2.x - self.joint_1.x
+
+    def get_y(self):
+        return self.joint_2.y - self.joint_1.y
+
+    def get_z(self):
+        # negated from perspective of cameras
+        return self.joint_1.z - self.joint_2.z
+
+    def as_normalized(self):
+        vect = np.array([self.get_x(), self.get_y(), self.get_z()])
+        norm = np.linalg.norm(vect)
+        return vect / norm
 
 class Joint:
     # colour range for opencv binary thresholding
@@ -107,11 +120,13 @@ class vision_1:
         # number of saved measurement states to use in average
         self.avg_window_size = 5
 
-        # threshold for when to switch from arctan to approximating angles using previous values
-        self.approx_angle_threshold   = 20**2
-        # number of angles to use in approximation (should not be greater than saved_state_window_size)
-        self.approx_angle_window_size = 50
+        # declare links between joints
+        #   no reason to mess with link 2 (0m link) or link 1 (always vertical)
+        self.link_3 = Link(self.yel2,  self.blue)
+        self.link_4 = Link(self.blue,  self.red)
 
+        self.avg_link_3 = Link(self.avg_yel2, self.avg_blue)
+        self.avg_link_4 = Link(self.avg_blue, self.avg_red)
 
         # keep a count of updates
         self._updates = {'camera_1': 0, 'camera_2': 0}
@@ -119,51 +134,13 @@ class vision_1:
     # handle images seen from the camera facing the yz-plane
     def callback_1(self, data):
         self.detect_centres(data, 1)
-        # calculate angles via trigonometry and linear algebra
-        # accuracy can be improved, but problems with oscillations due to obstruction
-        self.yel2.angle = np.arctan2(
-            self.avg_yel2.y - self.avg_blue.y,
-            (self.avg_yel2.z - self.avg_blue.z) #/ zero_guard(np.cos(self.yel1.angle))
-        )
+        self.update_angles()
         self.publish_angles()
 
     # handle images seen from the camera facing the xz-plane
     def callback_2(self, data):
         self.detect_centres(data, 2)
-        
-        # calculate angles via trigonometry and linear algebra
-        # arctan(ky/kx) = arctan(y/x) so division by cos of other angle is unneeded
-        x_diff = self.avg_yel1.x - self.avg_blue.x
-        z_diff = self.avg_yel1.z - self.avg_blue.z
-
-        # use approximation by interpolation when blobs are close (arctan(~0/~0) oscillate wildly)
-        # not used for now, because it works badly
-        if False and x_diff**2 + z_diff**2 < self.approx_angle_threshold:
-            old_angles = [joints[1].angle \
-                for joints in self.prev_joints[0:self.approx_angle_window_size]]
-            if self.yel1.approximator == None:
-                self.yel1.approximator = approximate_with_data(old_angles)
-                self.yel1.approx_arg  = self.approx_angle_window_size
-            self.yel1.angle = clip(self.yel1.approximator(self.yel1.approx_arg))
-            self.yel1.approx_arg += 1
-            
-        else:
-            self.yel1.approximator = None
-            self.yel1.approx_time  = 0
-            #negated because y axis points away from screen
-            self.yel1.angle = clip(np.arctan2(-x_diff, z_diff))
-
-        # TODO: sign is still wrong at times
-        # calculate cos and sin of blue joint from dot and cross proucts of links (as vectors)
-        link_3 = np.array([self.avg_blue.x - self.avg_yel1.x, self.avg_blue.y - self.avg_yel1.y, self.avg_blue.z - self.avg_yel1.z])
-        link_4 = np.array([self.avg_red.x - self.avg_blue.x, self.avg_red.y - self.avg_blue.y, self.avg_red.z - self.avg_blue.z])
-        link_norm_prod = zero_guard(np.linalg.norm(link_3) * np.linalg.norm(link_4))
-
-        cos_blue = np.dot(link_3, link_4) / link_norm_prod
-        sin_blue = np.linalg.norm(np.cross(link_3, link_4)) / link_norm_prod
-        # taking the norm eliminates sign, so need to re-derive it
-        self.blue.angle = np.arctan2(np.sign(self.yel2.angle)*sin_blue, cos_blue)
-
+        self.update_angles()
         self.publish_angles()
 
     def detect_centres(self, data, camera, dump_frames=True, output_dir='frames'):
@@ -201,8 +178,8 @@ class vision_1:
                 self.joints[i].obstructed = True
                 continue
             self.joints[i].obstructed = False
-            vertical   = int(moments[i]['m01'] / zero_guard(area))
-            horizontal = int(moments[i]['m10'] / zero_guard(area))
+            vertical   = int(moments[i]['m01'] / area)
+            horizontal = int(moments[i]['m10'] / area)
 
             self.joints[i].z     = vertical
             if camera == 1:
@@ -228,12 +205,34 @@ class vision_1:
             self.avg_joints[i].z     = total_z     / self.avg_window_size
             self.avg_joints[i].angle = total_angle / self.avg_window_size
             
-
-
     def publish_angles(self):
         joints_est = Float64MultiArray()
         joints_est.data = [self.green.angle, self.yel1.angle, self.yel2.angle, self.blue.angle]
         self.joints_est_1_pub.publish(joints_est)
+
+    def update_angles(self):
+        # calculate angles via trigonometry and linear algebra
+        link_3_normal = self.link_3.as_normalized()
+        link_4_normal = self.link_4.as_normalized()
+        [link_3_x, link_3_y, link_3_z] = link_3_normal
+        [link_4_x, link_4_y, link_4_z] = link_4_normal
+        self.yel2.angle = np.arcsin(-link_3_y)
+
+        if not near_zero(np.cos(self.yel2.angle)):
+            self.yel1.angle = np.arctan2(link_3_x, link_3_z)
+            blue_sin = np.cos(self.yel1.angle)*link_4_x - np.sin(self.yel1.angle)*link_4_z
+            self.blue.angle = np.arcsin(blue_sin)
+        else:
+            # calculate sin of blue joint from cross proucts of links (as vectors)
+            sin_blue = np.linalg.norm(np.cross(link_3_normal, link_4_normal))
+            # taking the norm eliminates sign, so need to re-derive it
+            self.blue.angle = np.arcsin(np.sign(self.yel2.angle)*sin_blue)
+
+            yel1_sin = np.cos(self.yel2.angle)*np.cos(self.blue.angle)*link_4_x - np.sin(self.blue.angle)*link_4_z
+            self.yel1.angle = np.arcsin(yel1_sin)
+            
+
+
 
 def main(args):
     _ = vision_1()

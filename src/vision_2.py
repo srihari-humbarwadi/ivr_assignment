@@ -20,12 +20,6 @@ def closer_to(val, x, y):
     else:
         return y
 
-# replace 0 with arbitrarily small value
-def zero_guard(val):
-    # replace 0 by this small amount to prevent division by zero
-    zero_guard_val = 0.001
-    return zero_guard_val if val == 0 else val
-
 class Link:
     # model the link as a vector from joint1 to joint2
     def __init__(self, joint_1, joint_2):
@@ -156,8 +150,8 @@ class vision_2:
             area       = moments[i]['m00']
             if area < self.obstruct_thres:
                 continue
-            vertical   = int(moments[i]['m01'] / zero_guard(area))
-            horizontal = int(moments[i]['m10'] / zero_guard(area))
+            vertical   = int(moments[i]['m01'] / area)
+            horizontal = int(moments[i]['m10'] / area)
             
             self.joints[i].z     = vertical
             if camera == 1:
