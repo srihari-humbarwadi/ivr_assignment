@@ -24,12 +24,12 @@ def sin_movements_2():
 
     # initialize node and publishers to joint angles
     rospy.init_node('sin_movements_2', anonymous=True)
-    joint1_pub = rospy.Publisher(pub_str % 1, Float64, queue_size=20)
-    joint2_pub = rospy.Publisher(pub_str % 2, Float64, queue_size=20)
-    joint3_pub = rospy.Publisher(pub_str % 3, Float64, queue_size=20)
-    joint4_pub = rospy.Publisher(pub_str % 4, Float64, queue_size=20)
+    joint1_pub = rospy.Publisher(pub_str % 1, Float64, queue_size=35)
+    joint2_pub = rospy.Publisher(pub_str % 2, Float64, queue_size=35)
+    joint3_pub = rospy.Publisher(pub_str % 3, Float64, queue_size=35)
+    joint4_pub = rospy.Publisher(pub_str % 4, Float64, queue_size=35)
 
-    rate = rospy.Rate(15)
+    rate = rospy.Rate(30)
     start_time = rospy.get_time()
     while not rospy.is_shutdown():
         time_from_start = rospy.get_time() - start_time
