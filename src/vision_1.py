@@ -10,6 +10,9 @@ from sensor_msgs.msg import Image
 from std_msgs.msg    import Float64MultiArray
 from cv_bridge       import CvBridge
 
+def clip(minimum, maximum, val):
+    return max(minimum, min(maximum, val))
+
 def near_zero(val):
     return abs(val) < 0.3
 
@@ -224,12 +227,15 @@ class vision_1:
             self.blue.angle = np.arcsin(blue_sin)
         else:
             # calculate sin of blue joint from cross proucts of links (as vectors)
-            sin_blue = np.linalg.norm(np.cross(link_3_normal, link_4_normal))
-            # taking the norm eliminates sign, so need to re-derive it
-            self.blue.angle = np.arcsin(np.sign(self.yel2.angle)*sin_blue)
+            #   taking the norm eliminates sign, so need to re-derive it
+            sin_blue = np.sign(self.yel2.angle)*np.linalg.norm(np.cross(link_3_normal, link_4_normal))
+            self.blue.angle = np.arcsin(sin_blue)
 
-            yel1_sin = np.cos(self.yel2.angle)*np.cos(self.blue.angle)*link_4_x - np.sin(self.blue.angle)*link_4_z
-            self.yel1.angle = np.arcsin(yel1_sin)
+            prod_cos = np.cos(self.yel2.angle)*np.cos(self.blue.angle)
+            yel1_sin = \
+                (prod_cos*link_4_x - sin_blue*link_4_z) \
+                    / max(0.05, prod_cos**2 + sin_blue**2)
+            self.yel1.angle = np.arcsin(clip(-1, 1, yel1_sin))
             
 
 
