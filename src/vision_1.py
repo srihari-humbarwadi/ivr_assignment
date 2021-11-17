@@ -234,7 +234,7 @@ class vision_1:
             prod_cos = np.cos(self.yel2.angle)*np.cos(self.blue.angle)
             yel1_sin = \
                 (prod_cos*link_4_x - sin_blue*link_4_z) \
-                    / max(0.05, prod_cos**2 + sin_blue**2)
+                    / max(1e-6, prod_cos**2 + sin_blue**2)
             self.yel1.angle = np.arcsin(clip(-1, 1, yel1_sin))
             
 
