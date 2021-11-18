@@ -7,8 +7,10 @@ import rospy
 import cv2
 import numpy as np
 from sensor_msgs.msg import Image
-from std_msgs.msg    import Float64MultiArray
+from std_msgs.msg    import Float64MultiArray, Float64
 from cv_bridge       import CvBridge
+
+PIXEL_TO_METRE = 0.039
 
 def near_zero(val):
     return abs(val) < 0.05
@@ -67,6 +69,14 @@ class vision_2:
         self.image_1_sub      = rospy.Subscriber('/camera1/robot/image_raw', Image, self.callback_1)
         self.image_2_sub      = rospy.Subscriber('/camera2/robot/image_raw', Image, self.callback_2)
         self.joints_est_2_pub = rospy.Publisher("joints_est_2", Float64MultiArray, queue_size=10)
+
+        self.joint_1_pub      = rospy.Publisher('joint_angle_1', Float64, queue_size=20)
+        self.joint_3_pub      = rospy.Publisher('joint_angle_3', Float64, queue_size=20)
+        self.joint_4_pub      = rospy.Publisher('joint_angle_4', Float64, queue_size=20)
+
+        # TODO: maybe remove or comment out these topics before submission?
+        self.end_effector_pos = rospy.Publisher('end_effector_pos', Float64MultiArray, queue_size=20)
+
         self.bridge = CvBridge()
 
         # set up kernel and etc. for blob detection
@@ -180,7 +190,19 @@ class vision_2:
     def publish_angles(self):
         joints_est = Float64MultiArray()
         joints_est.data = [self.green.angle, self.yel1.angle, self.yel2.angle, self.blue.angle]
+
+        joint_1 = Float64()
+        joint_3 = Float64()
+        joint_4 = Float64()
+
+        joint_1.data = self.green.angle
+        joint_3.data = self.yel2.angle
+        joint_4.data = self.blue.angle
+
         self.joints_est_2_pub.publish(joints_est)
+        self.joint_1_pub.publish(joint_1)
+        self.joint_3_pub.publish(joint_3)
+        self.joint_4_pub.publish(joint_4)
 
     def update_angles(self):
         # calculate angles via trigonometry and linear algebra,
@@ -235,7 +257,13 @@ class vision_2:
         self.blue.angle  = blue_ang
 
     def debug(self):
-        #print(self.link_3.as_normalized())
+        end_eff_pos      = Float64MultiArray()
+        end_eff_pos.data = [
+            PIXEL_TO_METRE * (self.red.x - self.green.x),
+            PIXEL_TO_METRE * (self.red.y - self.green.y),
+            PIXEL_TO_METRE * (self.green.z - self.red.z)
+        ]
+        self.end_effector_pos.publish(end_eff_pos)
         return
 
 
