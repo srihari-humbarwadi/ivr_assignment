@@ -8,6 +8,15 @@ from sensor_msgs.msg import Image
 from std_msgs.msg    import Float64MultiArray, Float64
 from cv_bridge       import CvBridge
 
+LINK_1_LENGTH = 4
+LINK_3_LENGTH = 3.2
+LINK_4_LENGTH = 2.8
+
+# short-hand
+L1 = LINK_1_LENGTH
+L3 = LINK_3_LENGTH
+L4 = LINK_4_LENGTH
+
 class control:
     def __init__(self):
         # subscribe to relevant topics
@@ -23,3 +32,19 @@ class control:
 
 # TODO
 # forward kinematics
+# short-hand for sin and cos
+def s(a):
+    return np.sin(a)
+
+def c(a):
+    return np.cos(a)
+
+# calculate the position of the end-effector from the angles of joints 1, 3, 4
+def K(j1, j3, j4):
+    l1 = LINK_1_LENGTH
+    l3 = LINK_3_LENGTH
+    l4 = LINK_4_LENGTH
+    x =  c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3
+    y =  s(j1)*s(j4)*L4 - c(j1)*s(j3)*c(j4)*L4 - c(j1)*s(j3)*L3
+    z =  c(j3)*c(j4)*L4 + c(j3)*L3             + L1
+    return [x, y, z]
