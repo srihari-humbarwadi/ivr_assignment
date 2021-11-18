@@ -12,8 +12,17 @@ from cv_bridge       import CvBridge
 
 from copy import deepcopy
 
+_Z_BIAS = 0.37
+_PIXEL_TO_METER = 0.039
+_GREEN_YELLOW_LINK = 4.0
+_YELLOW_BLUE_LINK = 3.2
+_BLUE_RED_LINK = 2.8
 
-_PIXEL_TO_METER = 1
+
+def get_missing_coordinate(coordinates, magnitude):
+    a, b = coordinates
+    x = np.sqrt(magnitude**2 - (a**2 + b**2))
+    return x
 
 def normalize_image(image):
     image = image / 255
@@ -92,9 +101,10 @@ class Joint:
         self._x = SimpleMovingAverageContainer(0, 5)
         self._y = SimpleMovingAverageContainer(0, 5)
         self._z = SimpleMovingAverageContainer(0, 5)
-        self._angle = SimpleMovingAverageContainer(0, 1)
+        self._angle = SimpleMovingAverageContainer(0, 5)
         self._rotation_axis = rotation_axis
         self._rotation_limit = rotation_limit
+        self._check_flips = False
         self._obstructed = False
         self._is_fixed = False
 
@@ -122,6 +132,12 @@ class Joint:
             self.update_coordinate('_x', horizontal)
 
     def update_angle(self, angle):
+        if self._check_flips:
+            print('checking if flipped for:', self._color)
+            if np.abs(self._angle.latest_value - angle) > 1.22 and np.abs(angle) > 0.2:
+                print('correcting flip', np.abs(self._angle.latest_value - angle))
+                angle = np.sign(self._angle.latest_value) * np.abs(angle)
+
         self._angle.set(np.clip(
             angle, -1.0 * self._rotation_limit,
             self._rotation_limit))
@@ -148,7 +164,7 @@ class Joint:
 
     @property
     def angle(self):
-        return self._angle.sma_value
+        return self._angle.latest_value
 
     @property
     def x(self):
@@ -160,7 +176,7 @@ class Joint:
 
     @property
     def z(self):
-        return self._z.latest_value + 0.4
+        return self._z.latest_value + _Z_BIAS
 
     @property
     def rotation_axis(self):
@@ -213,19 +229,18 @@ class RobotArm:
         # update joints which have y axis as their axis of rotation
         # joint2 (yellow)
         horizontal = self._joints[1].x - self._joints[3].x
-        vertical = self._joints[1].z - self._joints[3].z
+        vertical = np.clip(self._joints[1].z - self._joints[3].z, 0, _YELLOW_BLUE_LINK)
         j2_sma_angle = self._joints[1]._angle.sma_value
         j2_angle = np.arctan2(-horizontal, vertical)
         self._joints[1].update_angle(j2_angle)
 
         x, y, z = reverse_joint_rotation(self._joints[1], self._joints[3])
         horizontal = self._joints[2].y - y
-        vertical = self._joints[2].z - z
+        vertical = np.clip(self._joints[2].z - z, 0, _YELLOW_BLUE_LINK)
         j3_angle = np.arctan2(horizontal, vertical)
         self._joints[2].update_angle(j3_angle)
 
-        if np.abs(np.abs(j3_angle) - np.pi / 2) < 0.05:
-            print(np.abs(np.abs(j3_angle) - np.pi / 2))
+        if np.abs(np.abs(j3_angle) - np.pi / 2) < 0.05 or np.abs(vertical) < 0.05:
             self._joints[1]._angle.over_write_last_value(j2_sma_angle)
 
         blue_x, blue_y, blue_z = reverse_joint_rotation(self._joints[1], self._joints[3])
@@ -233,7 +248,7 @@ class RobotArm:
         blue_join_copy._x.set(blue_x)
         blue_join_copy._y.set(blue_y)
         blue_join_copy._z.set(blue_z)
-        blue_xx, blue_yy, blue_zz = reverse_joint_rotation(self._joints[2], blue_join_copy, invert_sign=True)
+        blue_xx, blue_yy, blue_zz = reverse_joint_rotation(self._joints[2], blue_join_copy, invert_sign=False)
 
 
         red_x, red_y, red_z = reverse_joint_rotation(self._joints[1], self._joints[4])
@@ -241,12 +256,16 @@ class RobotArm:
         red_join_copy._x.set(red_x)
         red_join_copy._y.set(red_y)
         red_join_copy._z.set(red_z)
-        red_xx, red_yy, red_zz = reverse_joint_rotation(self._joints[2], red_join_copy, invert_sign=True)
+        red_xx, red_yy, red_zz = reverse_joint_rotation(self._joints[2], red_join_copy, invert_sign=False)
 
         horizontal = blue_xx - red_xx
         vertical = blue_zz - red_zz
+        j4_sma_angle = self._joints[3]._angle.sma_value
         j4_angle = np.arctan2(-horizontal, vertical)
         self._joints[3].update_angle(j4_angle)
+
+        if np.abs(np.abs(j3_angle) - np.pi / 2) < 0.05 or np.abs(vertical) < 0.05:
+            self._joints[3]._angle.over_write_last_value(j4_sma_angle)
 
 
         self._processed['camera_1'] = False
@@ -284,7 +303,8 @@ class vision_1:
         joints = [
             Joint(color, axis, roration_limit)
             for color, axis, roration_limit in zip(colors, rotational_axis, abs_max_rotation)]
-
+        joints[3]._check_flips = True
+        print(joints[3])
         self.arm = RobotArm(joints)
         self._published = False
 
