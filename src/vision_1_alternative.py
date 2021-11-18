@@ -25,28 +25,28 @@ def normalize_image(image):
 def get_rotation_matrix(theta, axis):
     sin_theta = np.sin(theta)
     cos_theta = np.cos(theta)
-    
+
     if axis == 'x':
         matrix = np.array([
-            [1,         0,          0,    0],
-            [0,   cos_theta, sin_theta,   0],
-            [0,  -sin_theta, cos_theta,   0],
-            [0,         0,          0,    1]])
-        
+            [1,          0,           0,    0],
+            [0,    cos_theta, -sin_theta,   0],
+            [0,    sin_theta, cos_theta,    0],
+            [0,          0,           0,    1]])
+
     elif axis == 'y':
         matrix = np.array([
-            [cos_theta, 0, sin_theta,     0],
-            [0,         1,          0,    0],
-            [-sin_theta, 0, cos_theta,    0],
-            [0,         0,          0,    1]])
-    
+            [cos_theta,  0, sin_theta,      0],
+            [0,          1,           0,    0],
+            [-sin_theta, 0, cos_theta,      0],
+            [0,          0,           0,    1]])
+
     elif axis == 'z':
         matrix = np.array([
-            [cos_theta,  sin_theta, 0,    0],
-            [-sin_theta, cos_theta, 0,    0],
-            [0,         0,          1,    0],
-            [0,         0,          0,    1]])
-        
+            [cos_theta,  -sin_theta,  0,    0],
+            [sin_theta, cos_theta,    0,    0],
+            [0,          0,           1,    0],
+            [0,          0,           0,    1]])
+
     else:
         raise ValueError('Invalid rotational axis')
     return matrix
@@ -64,6 +64,9 @@ class SimpleMovingAverageContainer:
     def set(self, x):
         self._data[self._num_seen % self._window_size] = x
         self._num_seen += 1
+
+    def over_write_last_value(self, x):
+        self._data[(self._num_seen - 1) % self._window_size] = x
 
     @property
     def sma_value(self):
@@ -89,7 +92,7 @@ class Joint:
         self._x = SimpleMovingAverageContainer(0, 5)
         self._y = SimpleMovingAverageContainer(0, 5)
         self._z = SimpleMovingAverageContainer(0, 5)
-        self._angle = SimpleMovingAverageContainer(0, 5)
+        self._angle = SimpleMovingAverageContainer(0, 1)
         self._rotation_axis = rotation_axis
         self._rotation_limit = rotation_limit
         self._obstructed = False
@@ -157,7 +160,7 @@ class Joint:
 
     @property
     def z(self):
-        return self._z.latest_value
+        return self._z.latest_value + 0.4
 
     @property
     def rotation_axis(self):
@@ -174,7 +177,8 @@ def reverse_joint_rotation(previous_joint, current_joint, invert_sign=False):
     if invert_sign:
         previous_angle *= -1.0
 
-    rotation_matrix = get_rotation_matrix(previous_angle, 'y')
+    rotation_matrix = get_rotation_matrix(
+        previous_angle, previous_joint.rotation_axis)
     tx, ty, tz = current_joint.center - previous_joint.center
     t_p = [tx, ty, tz, 1]
 
@@ -210,34 +214,26 @@ class RobotArm:
         # joint2 (yellow)
         horizontal = self._joints[1].x - self._joints[3].x
         vertical = self._joints[1].z - self._joints[3].z
-        angle = np.arctan2(-horizontal, vertical)
-        self._joints[1].update_angle(angle)
+        j2_sma_angle = self._joints[1]._angle.sma_value
+        j2_angle = np.arctan2(-horizontal, vertical)
+        self._joints[1].update_angle(j2_angle)
 
-        # update joints which have x axis as their axis of rotation
-        # joint3 (yellow)
         x, y, z = reverse_joint_rotation(self._joints[1], self._joints[3])
-        # print('camera: {} | Detected: {} | Rotated: {}'.format(
-        #     camera, self._joints[3].center.tolist(), [x, y, z]))
         horizontal = self._joints[2].y - y
         vertical = self._joints[2].z - z
-        angle = np.arctan2(horizontal, vertical)
-        self._joints[2].update_angle(angle)
+        j3_angle = np.arctan2(horizontal, vertical)
+        self._joints[2].update_angle(j3_angle)
 
-
-        # joint4 (blue)
-        # horizontal = self._joints[3].x - self._joints[4].x
-        # vertical = self._joints[3].z - self._joints[4].z
-        # angle = np.arctan2(-horizontal, vertical)
-        # # offset by the angle of pervious joint that rotates along y axis
-        # angle = angle - self._joints[1].angle
-        # self._joints[3].update_angle(angle)
+        if np.abs(np.abs(j3_angle) - np.pi / 2) < 0.05:
+            print(np.abs(np.abs(j3_angle) - np.pi / 2))
+            self._joints[1]._angle.over_write_last_value(j2_sma_angle)
 
         blue_x, blue_y, blue_z = reverse_joint_rotation(self._joints[1], self._joints[3])
         blue_join_copy = deepcopy(self._joints[3])
         blue_join_copy._x.set(blue_x)
         blue_join_copy._y.set(blue_y)
         blue_join_copy._z.set(blue_z)
-        blue_xx, blue_yy, blue_zz = reverse_joint_rotation(self._joints[2], blue_join_copy)
+        blue_xx, blue_yy, blue_zz = reverse_joint_rotation(self._joints[2], blue_join_copy, invert_sign=True)
 
 
         red_x, red_y, red_z = reverse_joint_rotation(self._joints[1], self._joints[4])
@@ -245,12 +241,12 @@ class RobotArm:
         red_join_copy._x.set(red_x)
         red_join_copy._y.set(red_y)
         red_join_copy._z.set(red_z)
-        red_xx, red_yy, red_zz = reverse_joint_rotation(self._joints[2], red_join_copy)
+        red_xx, red_yy, red_zz = reverse_joint_rotation(self._joints[2], red_join_copy, invert_sign=True)
 
         horizontal = blue_xx - red_xx
         vertical = blue_zz - red_zz
-        angle = np.arctan2(-horizontal, vertical)
-        self._joints[3].update_angle(angle)
+        j4_angle = np.arctan2(-horizontal, vertical)
+        self._joints[3].update_angle(j4_angle)
 
 
         self._processed['camera_1'] = False
@@ -291,9 +287,6 @@ class vision_1:
 
         self.arm = RobotArm(joints)
         self._published = False
-
-        print(joints[1].center)
-        print(joints[2].center)
 
     # handle images seen from the camera facing the yz-plane
     def callback_1(self, data):
