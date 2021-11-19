@@ -41,10 +41,29 @@ def c(a):
 
 # calculate the position of the end-effector from the angles of joints 1, 3, 4
 def K(j1, j3, j4):
-    l1 = LINK_1_LENGTH
-    l3 = LINK_3_LENGTH
-    l4 = LINK_4_LENGTH
     x =  c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3
     y =  s(j1)*s(j4)*L4 - c(j1)*s(j3)*c(j4)*L4 - c(j1)*s(j3)*L3
     z =  c(j3)*c(j4)*L4 + c(j3)*L3             + L1
     return [x, y, z]
+
+# calculate the Jacobian from joint angles
+#   the rows are "written as columns" for readability
+def J(j1, j3, j4):
+    first_row = [
+        -s(j1)*s(j4)*L4 + c(j1)*s(j3)*c(j4)*L4 + c(j1)*s(j3)*L3,
+         s(j1)*c(j3)*c(j4)*L4 + s(j1)*c(j3)*L3,
+         c(j1)*c(j4)*L4 - s(j1)*s(j3)*s(j4)*L4
+    ]
+
+    second_row = [
+         c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3,
+        -c(j1)*c(j3)*c(j4)*L4 - c(j1)*c(j3)*L3,
+         s(j1)*c(j4)*L4 + c(j1)*s(j3)*s(j4)*L4
+    ]
+
+    third_row = [
+        0,
+        -s(j3)*c(j4)*L4 - s(j3)*L3,
+        -c(j3)*s(j4)*L4
+    ]
+    return [first_row, second_row, third_row]
