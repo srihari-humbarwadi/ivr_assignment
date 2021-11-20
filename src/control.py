@@ -49,21 +49,21 @@ def K(j1, j3, j4):
 # calculate the Jacobian from joint angles
 #   the rows are "written as columns" for readability
 def J(j1, j3, j4):
-    first_row = [
+    first_row = np.array([
         -s(j1)*s(j4)*L4 + c(j1)*s(j3)*c(j4)*L4 + c(j1)*s(j3)*L3,
          s(j1)*c(j3)*c(j4)*L4 + s(j1)*c(j3)*L3,
          c(j1)*c(j4)*L4 - s(j1)*s(j3)*s(j4)*L4
-    ]
+         ])
 
-    second_row = [
+    second_row = np.array([
          c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3,
         -c(j1)*c(j3)*c(j4)*L4 - c(j1)*c(j3)*L3,
          s(j1)*c(j4)*L4 + c(j1)*s(j3)*s(j4)*L4
-    ]
+        ])
 
-    third_row = [
+    third_row = np.array([
         0,
         -s(j3)*c(j4)*L4 - s(j3)*L3,
         -c(j3)*s(j4)*L4
-    ]
-    return [first_row, second_row, third_row]
+        ])
+    return np.stack([first_row, second_row, third_row], axis=0)
