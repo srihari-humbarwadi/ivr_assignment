@@ -141,6 +141,18 @@ class Control:
         q_new = q + (dt * np.dot(J_pinv, self.error.transpose()))
         self._reset_read_status()
 
+        # publish new angles to reach the target
+        joint_1_command = Float64MultiArray()
+        joint_3_command = Float64MultiArray()
+        joint_4_command = Float64MultiArray()
+
+        joint_1_command.data = q_new[0]
+        joint_3_command.data = q_new[1]
+        joint_4_command.data = q_new[2]
+
+        self.joint_1_pub.publish(joint_1_command)
+        self.joint_3_pub.publish(joint_3_command)
+        self.joint_4_pub.publish(joint_4_command)
         return q_new
 
 
