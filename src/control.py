@@ -5,7 +5,7 @@ import sys
 import cv2
 import numpy as np
 import rospy
-from std_msgs.data import Float64, Float64MultiArray
+from std_msgs.msg import Float64, Float64MultiArray
 
 LINK_1_LENGTH = 4
 LINK_3_LENGTH = 3.2
