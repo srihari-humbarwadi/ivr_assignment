@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # calculates forward kinematics and uses inverse kinematics to move robot towards desired trajectory
 
 import sys
@@ -63,6 +65,8 @@ def get_jacobian(j1, j3, j4):
 
 class Control:
     def __init__(self):
+        rospy.init_node('control', anonymous=True)
+
         # subscribe to relevant topics
         self.joint_1_sub = rospy.Subscriber(
             'joint_angle_1', Float64, self._read_joint1_angle)
@@ -73,7 +77,7 @@ class Control:
         self.detected_end_effector_sub = rospy.Subscriber(
             'end_effector_pos', Float64MultiArray, self._read_detected_end_effector_position)
         self.target_sub = rospy.Subscriber(
-            '/target_control/target_pos', Float64MultiArray, self.open_control)
+            '/target_pos', Float64MultiArray, self.open_control)
 
         # prepare publishers for joint angles
         self.joint_1_pub = rospy.Publisher(
@@ -85,12 +89,12 @@ class Control:
 
         self._detected_q = {
             'joint1': 0,
-            'joint2': 0,
+            'joint3': 0,
             'joint4': 0,
         }
         self._read_status = {
             'joint1': False,
-            'joint2': False,
+            'joint3': False,
             'joint4': False,
             'detected_end_effector': False,
         }
@@ -99,52 +103,63 @@ class Control:
         self._previous_time = np.array([rospy.get_time()], dtype='float64')
 
     def _read_joint1_angle(self, data):
-        self._detected_q['joint1'] = data
+        if not self._is_read_required():
+            return
+        self._detected_q['joint1'] = data.data
         self._read_status['joint1'] = True
 
     def _read_joint3_angle(self, data):
+        if not self._is_read_required():
+            return
         self._detected_q['joint3'] = data.data
         self._read_status['joint3'] = True
 
     def _read_joint4_angle(self, data):
+        if not self._is_read_required():
+            return
         self._detected_q['joint4'] = data.data
         self._read_status['joint4'] = True
 
     def _read_detected_end_effector_position(self, data):
-        self._detected_pos = data.data
-        self._read_status['end_effector_position'] = True
+        if not self._is_read_required():
+            return
+        self._detected_pos = np.array(data.data, dtype=np.float64)
+        self._read_status['detected_end_effector'] = True
 
     def _reset_read_status(self):
         for k, _ in self._read_status.items():
             self._read_status[k] = False
 
+    def _is_read_required(self):
+        return not all(list(self._read_status.values()))
+
     def open_control(self, data):
 
         if not all(list(self._read_status.values())):
             return
+        self._reset_read_status()
 
-        joint_angels = [self._detected_q['join1'],
-                        self._detected_q['join3'],
-                        self._detected_q['join4']]
+        joint_angels = [self._detected_q['joint1'],
+                        self._detected_q['joint3'],
+                        self._detected_q['joint4']]
 
         q = np.array([*joint_angels])
         J = get_jacobian(*joint_angels)
         J_pinv = np.linalg.pinv(J)
 
-        self._target_pos = data
+        self._target_pos = np.array(data.data, dtype=np.float64)
         curent_time = rospy.get_time()
         dt = curent_time - self._previous_time
         self._previous_time = curent_time
 
-        self.error = (self._detected_pos - self._target_pos) / dt
-
-        q_new = q + (dt * np.dot(J_pinv, self.error.transpose()))
-        self._reset_read_status()
+        self.error = (self._target_pos - self._detected_pos) / dt
+        self.error = np.reshape(self.error, [3, 1])
+        q_new = q + (dt * np.matmul(J_pinv, self.error).squeeze())
 
         # publish new angles to reach the target
-        joint_1_command = Float64MultiArray()
-        joint_3_command = Float64MultiArray()
-        joint_4_command = Float64MultiArray()
+        joint_1_command = Float64()
+        joint_3_command = Float64()
+        joint_4_command = Float64()
 
         joint_1_command.data = q_new[0]
         joint_3_command.data = q_new[1]
@@ -153,7 +168,6 @@ class Control:
         self.joint_1_pub.publish(joint_1_command)
         self.joint_3_pub.publish(joint_3_command)
         self.joint_4_pub.publish(joint_4_command)
-        return q_new
 
 
 def main(args):
