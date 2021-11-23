@@ -3,10 +3,12 @@
 # calculates forward kinematics and uses inverse kinematics to move robot towards desired trajectory
 
 import sys
+from time import time
 
 import cv2
 import numpy as np
 import rospy
+import tensorflow as tf
 from std_msgs.msg import Float64, Float64MultiArray
 
 LINK_1_LENGTH = 4
@@ -19,29 +21,81 @@ L3 = LINK_3_LENGTH
 L4 = LINK_4_LENGTH
 
 
-# TODO
-# forward kinematics
-# short-hand for sin and cos
+# def get_rotation_matrix(theta, axis):
+#     sin_theta = tf.math.sin(theta)
+#     cos_theta = tf.math.cos(theta)
+
+#     if axis == 'x':
+#         matrix = tf.convert_to_tensor([
+#             [1,          0,           0,    0],
+#             [0,    cos_theta, -sin_theta,   0],
+#             [0,    sin_theta, cos_theta,    0],
+#             [0,          0,           0,    1]])
+
+#     elif axis == 'y':
+#         matrix = tf.convert_to_tensor([
+#             [cos_theta,  0, sin_theta,      0],
+#             [0,          1,           0,    0],
+#             [-sin_theta, 0, cos_theta,      0],
+#             [0,          0,           0,    1]])
+
+#     elif axis == 'z':
+#         matrix = tf.convert_to_tensor([
+#             [cos_theta,  -sin_theta,  0,    0],
+#             [sin_theta, cos_theta,    0,    0],
+#             [0,          0,           1,    0],
+#             [0,          0,           0,    1]])
+
+#     else:
+#         raise ValueError('Invalid rotational axis')
+#     return tf.cast(matrix, dtype=tf.float32)
+
+
+# matrix multiplications are costly in tf avoid this
+
+# def FK(j1, j3, j4):
+#     j1 = tf.clip_by_value(j1, -np.pi, np.pi)
+#     j3 = tf.clip_by_value(j3, -np.pi / 2, np.pi / 2)
+#     j4 = tf.clip_by_value(j4, -np.pi / 2, np.pi / 2)
+
+#     a1_r = get_rotation_matrix(j1, 'z')
+#     a1_t = np.eye(4)
+#     a1_t[2, 3] = LINK_1_LENGTH
+#     a1_t = tf.constant(a1_t, dtype=tf.float32)
+#     a1 = tf.matmul(a1_r, a1_t)
+
+#     a3_r = get_rotation_matrix(j3, 'x')
+#     a3_t = np.eye(4)
+#     a3_t[2, 3] = LINK_3_LENGTH
+#     a3_t = tf.constant(a3_t, dtype=tf.float32)
+#     a3 = tf.matmul(a3_r, a3_t)
+
+#     a4_r = get_rotation_matrix(j4, 'y')
+#     a4_t = np.eye(4)
+#     a4_t[2, 3] = LINK_4_LENGTH
+#     a4_t = tf.constant(a4_t, dtype=tf.float32)
+#     a4 = tf.matmul(a4_r, a4_t)
+
+#     a = tf.matmul(a1, tf.matmul(a3, a4))
+#     xyz = a[:3, 3]
+#     return xyz
+
 def s(a):
-    return np.sin(a)
+    return tf.math.sin(a)
 
 
 def c(a):
-    return np.cos(a)
+    return tf.math.cos(a)
 
 # calculate the position of the end-effector from the angles of joints 1, 3, 4
-
-
-def K(j1, j3, j4):
+def FK(j1, j3, j4):
     x = c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3
     y = s(j1)*s(j4)*L4 - c(j1)*s(j3)*c(j4)*L4 - c(j1)*s(j3)*L3
     z = c(j3)*c(j4)*L4 + c(j3)*L3 + L1
-    return [x, y, z]
+    return tf.convert_to_tensor([x, y, z])
 
 # calculate the Jacobian from joint angles
 #   the rows are "written as columns" for readability
-
-
 def get_jacobian(j1, j3, j4):
     first_row = np.array([
         -s(j1)*s(j4)*L4 + c(j1)*s(j3)*c(j4)*L4 + c(j1)*s(j3)*L3,
@@ -63,21 +117,37 @@ def get_jacobian(j1, j3, j4):
     return np.stack([first_row, second_row, third_row], axis=0)
 
 
+def error_fn(true, pred):
+    error = tf.losses.mse(true, pred)
+    return error
+
+optimizer = tf.optimizers.SGD(learning_rate=0.01)
+
+@tf.function(jit_compile=True)
+def solve(target, j1, j3, j4):
+    q = [j1, j3, j4]
+    error = tf.constant(0.0)
+    for step in tf.range(1, 501):
+        with tf.GradientTape() as tape:
+            x = FK(j1, j3, j4)
+            error = error_fn(target, x)
+            gradients = tape.gradient(error, q)
+        mean_abs_diff = tf.reduce_mean(tf.abs(x - target))
+        if mean_abs_diff < 0.005:
+            break
+        optimizer.apply_gradients(zip(gradients, q))
+    return {'steps': step, 'error': mean_abs_diff, 'q': q}
+
+def get_tf_variable(name, clip):
+    value = np.random.normal(0, 0.005 * clip)
+    return tf.Variable(value, name=name, dtype=tf.float32)
+
 class Control:
     def __init__(self):
         rospy.init_node('control', anonymous=True)
 
         # subscribe to relevant topics
-        self.joint_1_sub = rospy.Subscriber(
-            'joint_angle_1', Float64, self._read_joint1_angle)
-        self.joint_3_sub = rospy.Subscriber(
-            'joint_angle_3', Float64, self._read_joint3_angle)
-        self.joint_4_sub = rospy.Subscriber(
-            'joint_angle_4', Float64, self._read_joint4_angle)
-        self.detected_end_effector_sub = rospy.Subscriber(
-            'end_effector_pos', Float64MultiArray, self._read_detected_end_effector_position)
-        self.target_sub = rospy.Subscriber(
-            '/target_pos', Float64MultiArray, self.open_control)
+        self.target_sub = rospy.Subscriber('/target_pos', Float64MultiArray, self.open_control)
 
         # prepare publishers for joint angles
         self.joint_1_pub = rospy.Publisher(
@@ -87,83 +157,37 @@ class Control:
         self.joint_4_pub = rospy.Publisher(
             '/robot/joint4_position_controller/command', Float64, queue_size=20)
 
-        self._detected_q = {
-            'joint1': 0,
-            'joint3': 0,
-            'joint4': 0,
+        self._initialize_variables()
+
+    def _initialize_variables(self):
+        self._q = {
+            'joint1': get_tf_variable('joint1', np.pi / 4),
+            'joint3': get_tf_variable('joint3', np.pi / 2),
+            'joint4': get_tf_variable('joint4', np.pi / 2),
         }
-        self._read_status = {
-            'joint1': False,
-            'joint3': False,
-            'joint4': False,
-            'detected_end_effector': False,
-        }
-        self._detected_pos = 0
-        self._target_pos = 0
-        self._previous_time = np.array([rospy.get_time()], dtype='float64')
-
-    def _read_joint1_angle(self, data):
-        if not self._is_read_required():
-            return
-        self._detected_q['joint1'] = data.data
-        self._read_status['joint1'] = True
-
-    def _read_joint3_angle(self, data):
-        if not self._is_read_required():
-            return
-        self._detected_q['joint3'] = data.data
-        self._read_status['joint3'] = True
-
-    def _read_joint4_angle(self, data):
-        if not self._is_read_required():
-            return
-        self._detected_q['joint4'] = data.data
-        self._read_status['joint4'] = True
-
-    def _read_detected_end_effector_position(self, data):
-        if not self._is_read_required():
-            return
-        self._detected_pos = np.array(data.data, dtype=np.float64)
-        self._read_status['detected_end_effector'] = True
-
-    def _reset_read_status(self):
-        for k, _ in self._read_status.items():
-            self._read_status[k] = False
-
-    def _is_read_required(self):
-        return not all(list(self._read_status.values()))
 
     def open_control(self, data):
+        self._initialize_variables()
 
-        if not all(list(self._read_status.values())):
-            return
-        self._reset_read_status()
+        j1 = self._q['joint1']
+        j3 = self._q['joint3']
+        j4 = self._q['joint4']
+        target_pos = tf.constant(data.data, dtype=tf.float32)
 
-        joint_angels = [self._detected_q['joint1'],
-                        self._detected_q['joint3'],
-                        self._detected_q['joint4']]
-
-        q = np.array([*joint_angels])
-        J = get_jacobian(*joint_angels)
-        J_pinv = np.linalg.pinv(J)
-
-        self._target_pos = np.array(data.data, dtype=np.float64)
-        curent_time = rospy.get_time()
-        dt = curent_time - self._previous_time
-        self._previous_time = curent_time
-
-        self.error = (self._target_pos - self._detected_pos) / dt
-        self.error = np.reshape(self.error, [3, 1])
-        q_new = q + (dt * np.matmul(J_pinv, self.error).squeeze())
+        s = time()
+        results = solve(target_pos, j1, j3, j4)
+        e = time()
+        print('Reached error: {:3f} in {} steps for target: {} in {:.3f} secs'.format(
+            results['error'].numpy(), results['steps'].numpy(), target_pos.numpy(), e - s))
 
         # publish new angles to reach the target
         joint_1_command = Float64()
         joint_3_command = Float64()
         joint_4_command = Float64()
 
-        joint_1_command.data = q_new[0]
-        joint_3_command.data = q_new[1]
-        joint_4_command.data = q_new[2]
+        joint_1_command.data = results['q'][0]
+        joint_3_command.data = results['q'][1]
+        joint_4_command.data = results['q'][2]
 
         self.joint_1_pub.publish(joint_1_command)
         self.joint_3_pub.publish(joint_3_command)
