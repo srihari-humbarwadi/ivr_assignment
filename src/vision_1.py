@@ -13,8 +13,19 @@ from cv_bridge       import CvBridge
 def clip(minimum, maximum, val):
     return max(minimum, min(maximum, val))
 
+# return the argument (x or y) closer to val
+def closer_to(val, x, y):
+    if abs(x - val) <= abs(y - val):
+        return x
+    else:
+        return y
+
+NEARNESS_CONSTANT = 0.4
+def near(val1, val2):
+    return abs(val1 - val2) < NEARNESS_CONSTANT
+# TODO: make near_zero use near once no worry of conflicts
 def near_zero(val):
-    return abs(val) < 0.3
+    return near(val, 0)
 
 # approximate using Langrange interpolation
 def approximate_with_data(ys):
@@ -219,24 +230,23 @@ class vision_1:
         link_4_normal = self.link_4.as_normalized()
         [link_3_x, link_3_y, link_3_z] = link_3_normal
         [link_4_x, link_4_y, link_4_z] = link_4_normal
+
+        # update joint 3 angle
         self.yel2.angle = np.arcsin(-link_3_y)
 
-        if not near_zero(np.cos(self.yel2.angle)):
+        # update joint 2's angle 
+        if not near(np.pi/2, abs(self.yel2.angle)):
             self.yel1.angle = np.arctan2(link_3_x, link_3_z)
-            blue_sin = np.cos(self.yel1.angle)*link_4_x - np.sin(self.yel1.angle)*link_4_z
-            self.blue.angle = np.arcsin(blue_sin)
-        else:
-            # calculate sin of blue joint from cross proucts of links (as vectors)
-            #   taking the norm eliminates sign, so need to re-derive it
-            sin_blue = np.sign(self.yel2.angle)*np.linalg.norm(np.cross(link_3_normal, link_4_normal))
-            self.blue.angle = np.arcsin(sin_blue)
-
+        elif not near_zero(self.blue.angle):
             prod_cos = np.cos(self.yel2.angle)*np.cos(self.blue.angle)
-            yel1_sin = \
-                (prod_cos*link_4_x - sin_blue*link_4_z) \
-                    / max(1e-6, prod_cos**2 + sin_blue**2)
-            self.yel1.angle = np.arcsin(clip(-1, 1, yel1_sin))
-            
+            blue_sin = np.sin(self.blue.angle)
+            sum_sqr_x_z = link_4_x**2 + link_4_z**2
+            yel1_sin = (prod_cos*link_4_x - blue_sin*link_4_z) / sum_sqr_x_z
+            self.yel1.angle = np.arcsin(np.clip(yel1_sin, -1, 1))
+
+        # update joint 4's angle
+        blue_sin = np.cos(self.yel1.angle)*link_4_x - np.sin(self.yel1.angle)*link_4_z
+        self.blue.angle = np.arcsin(np.clip(blue_sin, -1, 1))
 
 
 
