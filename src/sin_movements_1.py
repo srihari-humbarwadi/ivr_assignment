@@ -11,13 +11,13 @@ def joint1_movement(_):
     return 0
 
 def joint2_movement(t):
-    return np.pi/2 #* np.sin(t * np.pi/15)
+    return np.pi/2 * np.sin(t * np.pi/15)
 
 def joint3_movement(t):
     return np.pi/2 * np.sin(t * np.pi/20)
 
 def joint4_movement(t):
-    return np.pi/4 #np.pi/2 #* np.sin(t * np.pi/18)
+    return np.pi/2 * np.sin(t * np.pi/18)
 
 def sin_movements_1():
     pub_str = '/robot/joint%i_position_controller/command'
