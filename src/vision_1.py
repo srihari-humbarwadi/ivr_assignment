@@ -240,9 +240,10 @@ class vision_1:
         elif not near_zero(self.blue.angle):
             prod_cos = np.cos(self.yel2.angle)*np.cos(self.blue.angle)
             blue_sin = np.sin(self.blue.angle)
-            sum_sqr_x_z = link_4_x**2 + link_4_z**2
-            yel1_sin = (prod_cos*link_4_x - blue_sin*link_4_z) / sum_sqr_x_z
-            self.yel1.angle = np.arcsin(np.clip(yel1_sin, -1, 1))
+            yel1_sin = (prod_cos*link_4_x - blue_sin*link_4_z)
+            yel2_cos = (blue_sin*link_4_x + prod_cos*link_4_z)
+            yel1_angle = np.arctan2(yel1_sin, yel2_cos)
+            self.yel1.angle = np.clip(yel1_angle, -np.pi/2, np.pi/2)
 
         # update joint 4's angle
         blue_sin = np.cos(self.yel1.angle)*link_4_x - np.sin(self.yel1.angle)*link_4_z
