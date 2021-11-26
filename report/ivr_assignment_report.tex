@@ -1,5 +1,6 @@
 \documentclass[11pt, a4paper]{article}
 \usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
 \renewcommand{\linespread}{1.0}
 
 \title{IVR Assignment Report}
@@ -13,6 +14,29 @@
     \subsection{Part II \textemdash Fixing Joint 2}
     \section{Control}
     \subsection{Forward Kinematics}
+    We derived Forward Kinematics for the robot using the D-H convention.
+    \begin{center}
+        \begin{tabular}{ |c|c|c|c|c| }
+            \hline
+            link & $\alpha$ & a & d & $\theta$\\
+            \hline
+            1 & $-\frac{\pi}{2}$ & 0 & $L_1$ & $\nu$\\
+            2 & $-\frac{\pi}{2}$ & 0 & 0 & $-\pi/2$\\
+            3 & $\frac{\pi}{2}$ & $L_3$ & 0 & $\phi$\\
+            4 & 0 & $L_4$ & 0 & $\psi$\\
+            \hline
+        \end{tabular}
+    \end{center}
+    
+
+    $$
+    K(\textbf{q}) = 
+        \begin{pmatrix}
+            c_{\nu}s_{\psi}L_4 + s_{\nu}s_{\phi}c_{\psi}L_4 + s_{\nu}s_{\phi}L_3\\
+            s_{\nu}s_{\psi}L_4 - c_{\nu}s_{\phi}c_{\psi}L_4 - c_{\nu}s_{\phi}L_3\\
+            c_{\phi}c_{\psi}L_4 + c_{\phi}L_3 + L_1
+        \end{pmatrix}
+    $$
     \subsection{Inverse Kinematics}
 
 \end{document}
