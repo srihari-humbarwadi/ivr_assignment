@@ -11,7 +11,43 @@
     \section{Contributions}
     \section{Joint State Estimation}
     \subsection{Part I \textemdash Fixing Joint 1}
+    $$
+    \textbf{r}_1(\textbf{q}) =
+    \begin{pmatrix}
+        c_{\phi}s_{\nu}\\
+       -s_{\phi}\\
+        c_{\phi}c_{\nu}
+    \end{pmatrix} 
+    $$
+    
+    $$
+    \textbf{r}_2(\textbf{q}) =
+    \begin{pmatrix}
+        c_{\nu}s_{\psi} + s_{\nu}c_{\phi}c_{\psi}\\
+       -s_{\phi}c_{\psi}\\
+       -s_{\nu}s_{\psi} + c_{\nu}c_{\phi}c_{\psi}
+    \end{pmatrix} 
+    $$
+
     \subsection{Part II \textemdash Fixing Joint 2}
+    $$
+    \textbf{r}_1(\textbf{q}) =
+    \begin{pmatrix}
+        s_{\vartheta}s_{\phi}\\
+       -c_{\vartheta}s_{\phi}\\
+        c_{\phi}
+    \end{pmatrix} 
+    $$
+
+    $$
+    \textbf{r}_2(\textbf{q}) =
+    \begin{pmatrix}
+        c_{\vartheta}s_{\psi} + s_{\vartheta}s_{\phi}c_{\psi}\\
+        s_{\vartheta}s_{\psi} - c_{\vartheta}s_{\phi}c_{\psi}\\
+        c_{\phi}c_{\psi}
+    \end{pmatrix}
+    $$
+
     \section{Control}
     \subsection{Forward Kinematics}
     We derived Forward Kinematics for the robot using the D-H convention.
@@ -20,8 +56,8 @@
             \hline
             link & $\alpha$ & a & d & $\theta$\\
             \hline
-            1 & $-\frac{\pi}{2}$ & 0 & $L_1$ & $\nu$\\
-            2 & $-\frac{\pi}{2}$ & 0 & 0 & $-\pi/2$\\
+            1 & $-\frac{\pi}{2}$ & 0 & $L_1$ & $\vartheta$\\
+            2 & $-\frac{\pi}{2}$ & 0 & 0 & $-\frac{\pi}{2}$\\
             3 & $\frac{\pi}{2}$ & $L_3$ & 0 & $\phi$\\
             4 & 0 & $L_4$ & 0 & $\psi$\\
             \hline
@@ -32,11 +68,27 @@
     $$
     K(\textbf{q}) = 
         \begin{pmatrix}
-            c_{\nu}s_{\psi}L_4 + s_{\nu}s_{\phi}c_{\psi}L_4 + s_{\nu}s_{\phi}L_3\\
-            s_{\nu}s_{\psi}L_4 - c_{\nu}s_{\phi}c_{\psi}L_4 - c_{\nu}s_{\phi}L_3\\
+            c_{\vartheta}s_{\psi}L_4 + s_{\vartheta}s_{\phi}c_{\psi}L_4 + s_{\vartheta}s_{\phi}L_3\\
+            s_{\vartheta}s_{\psi}L_4 - c_{\vartheta}s_{\phi}c_{\psi}L_4 - c_{\vartheta}s_{\phi}L_3\\
             c_{\phi}c_{\psi}L_4 + c_{\phi}L_3 + L_1
         \end{pmatrix}
     $$
     \subsection{Inverse Kinematics}
+    $$
+    J(\textbf{q}) =
+        \begin{pmatrix}
+           -s_{\vartheta}s_{\psi}L_4 + c_{\vartheta}s_{\phi}c_{\psi}L_4 + c_{\vartheta}s_{\phi}L_3 & 
+            s_{\vartheta}c_{\phi}c_{\psi}L_4 + s_{\vartheta}c_{\phi}L_3 & 
+            c_{\vartheta}c_{\psi}L_4 - s_{\vartheta}s_{\phi}s_{\psi}L_4\\
+
+            c_{\vartheta}s_{\psi}L_4 + s_{\vartheta}s_{\phi}c_{\psi}L_4 + s_{\vartheta}s_{\phi}L_3 &
+           -c_{\vartheta}c_{\phi}c_{\psi}L_4 - c_{\vartheta}c_{\phi}L_3 &
+            s_{\vartheta}c_{\psi}L_4 + c_{\vartheta}s_{\phi}s_{\psi}L_4\\
+
+            0 &
+           -s_{\phi}c_{\psi}L_4 - s_{\phi}L_3 &
+           -c_{\phi}s_{\psi}L_4\\
+        \end{pmatrix}
+    $$
 
 \end{document}
