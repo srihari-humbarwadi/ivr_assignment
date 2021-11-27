@@ -9,44 +9,194 @@
 \begin{document}
     \maketitle
     \section{Contributions}
+
+
+
+    \section{Notation}
+    For this report, we use the symbols
+    $\vartheta$, $\nu$, $\phi$, $\psi$ to denote the value in radians of the angles 
+    of joints 1, 2, 3, and 4, respectively. 
+    We denote the position in 3D space of the $i^{th}$ joint with symbols
+    $x_i$, $y_i$, $z_i$, and $x_e$, $y_e$, $z_e$ for the position of the end-effector,
+    from any arbitrary left-handeded co-ordinate frame.
+    % TODO is this true? %
+    (We only use the difference between these values so the position of the frame
+    does not matter. We choose a left-hand frame as that made getting positional data
+    from the cameras more straightforward.)
+    We also use the symbols $L_1$, $L_2$, $L_3$, $L_4$ for the
+    lengths of the respective links. 
+    We use short-hand notation for sine and cosine,
+    as in $s_{\gamma}$ is to be read as $\sin(\gamma)$ and $c_{\gamma}$
+    is to be read as $\cos(\gamma)$ for angles $\gamma$.
+    
+
+
+
     \section{Joint State Estimation}
     \subsection{Part I \textemdash Fixing Joint 1}
+    To calculate the angles of the joints, we first use blob detection to
+    find where the joints are in 3D space. % TODO Elaborate?
+    We use thresholding to filter out the positions of the green,
+    yellow, blue, and red blobs which correspond to joints 1, 2, 3, 4 and 
+    the end-effector, respectively. As we have two cameras, one facing
+    the yz-plane, and the other facing the xz-plane, we perform this
+    operation on the images received from both camera, and combine their
+    results. % TODO Elaborate? %
+
+    Once we have the necessary joints positions, we then consider the
+    orientation of the links between them, specifically link 3 and link 4.
+    To do so, we calculate unit-length vectors $\textbf{r}_3(\textbf{q})$,
+    $\textbf{r}_4(\textbf{q})$ pointing from the center of
+    joint 2 to joint 3, and joint 3 to joint 4, respectively. We choose
+    two right-handed co-ordinate frames positioned at the base of the vectors
+    so when all joints are at angle 0, the unit vectors have co-ordinates
+    [0 0 1] in those frames.  
+    These vectors are rotated as the joint angles change as so: % TODO explain? %
+
+
     $$
-    \textbf{r}_1(\textbf{q}) =
+    \textbf{r}_3(\textbf{q}) :=
+    \begin{pmatrix}
+        r_{3x}\\
+        r_{3y}\\
+        r_{3z}
+    \end{pmatrix} =
     \begin{pmatrix}
         c_{\phi}s_{\nu}\\
        -s_{\phi}\\
         c_{\phi}c_{\nu}
-    \end{pmatrix} 
+    \end{pmatrix} = \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
+    \begin{pmatrix}
+        x_4 - x_3\\
+        y_4 - y_3\\
+        z_3 - z_4
+    \end{pmatrix}
     $$
-    
+
     $$
-    \textbf{r}_2(\textbf{q}) =
+    \textbf{r}_4(\textbf{q}) :=
+    \begin{pmatrix}
+        r_{4x}\\
+        r_{4y}\\
+        r_{4z}
+    \end{pmatrix} =
     \begin{pmatrix}
         c_{\nu}s_{\psi} + s_{\nu}c_{\phi}c_{\psi}\\
        -s_{\phi}c_{\psi}\\
        -s_{\nu}s_{\psi} + c_{\nu}c_{\phi}c_{\psi}
-    \end{pmatrix} 
+    \end{pmatrix} = \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
+    \begin{pmatrix}
+        x_e - x_4\\
+        y_e - y_4\\
+        z_4 - z_e
+    \end{pmatrix}
     $$
 
+    The formulae above can be derived from geometry (e.g. as in the derivation
+    of the spherical co-ordinates in SVCDE) or from multiplying the relevant
+    rotation matrices to transform co-ordinate frames (translations are unnecessary
+    as we are only concerned with orientation). Note that we negate the z component
+    as we switch from a left-handed frame to right-handed frames.
+
+    With these values, we can calculate the joint angles as so:
+    \begin{align*}
+        \nu  &= \arctan2(r_{3x}, r_{3z})\\
+        \phi &= \arcsin(-r_{3y})\\
+        \psi &= \arcsin(r_{4x}c_{\nu} - r_{4z}s_{\nu})
+    \end{align*}
+
+    where we calculate $\nu$ before $\psi$. 
+    However, when $\phi$ is near $\pm\frac{\pi}{2}$, 
+    $r_{3x}$ and $r_{3z}$ are near zero, so $\arctan2(r_{3x}, r_{3z})$
+    oscillates quickly and rapidly over a short time. % TODO explain why?
+    In such a case, we switch to calculating 
+    $\nu = \arctan2(r_{4x}c_{\phi}c_{\psi} - r_{4z}s_{\psi}, \hspace{0.2cm}
+                    r_{4x}s_{\psi} + r_{4z}c_{\phi}c_{\psi}
+    )$, where we use the value of $\psi$ computed from the last iteration.
+    Additionally, when $\psi$ is near $0$, as well, we stop calculating
+    $\nu$ and keep the angle published constant. This is because we have
+    a gimbal lock situation, any value of $\nu$ will produce the same observed
+    set of positions, so we have no information on what $\nu$ can be, except
+    that it cannot physically change from its previous value too much.
+
+
     \subsection{Part II \textemdash Fixing Joint 2}
+    We follow much of the same methodology from Part I, but with a slight
+    modification as most observed sets of positions of the joints now correspond
+    with two possible set of angles. We calculate the unit-vectors now as:
     $$
-    \textbf{r}_1(\textbf{q}) =
+    \textbf{r}_3(\textbf{q}) :=
+    \begin{pmatrix}
+        r_{3x}\\
+        r_{3y}\\
+        r_{3z} 
+    \end{pmatrix} =
     \begin{pmatrix}
         s_{\vartheta}s_{\phi}\\
        -c_{\vartheta}s_{\phi}\\
         c_{\phi}
-    \end{pmatrix} 
+    \end{pmatrix} = \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
+    \begin{pmatrix}
+        x_4 - x_3\\
+        y_4 - y_3\\
+        z_3 - z_4
+    \end{pmatrix}
     $$
 
     $$
-    \textbf{r}_2(\textbf{q}) =
+    \textbf{r}_4(\textbf{q}) :=
+    \begin{pmatrix}
+        r_{4x}\\
+        r_{4y}\\
+        r_{4z}
+    \end{pmatrix} =
     \begin{pmatrix}
         c_{\vartheta}s_{\psi} + s_{\vartheta}s_{\phi}c_{\psi}\\
         s_{\vartheta}s_{\psi} - c_{\vartheta}s_{\phi}c_{\psi}\\
         c_{\phi}c_{\psi}
+    \end{pmatrix} = \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
+    \begin{pmatrix}
+        x_e - x_4\\
+        y_e - y_4\\
+        z_4 - z_e
     \end{pmatrix}
     $$
+
+    and the angles as:
+    \begin{align*}
+        \vartheta &= \arctan2(r_{3x}sgn(\phi), -r_{3y}sgn(\phi))\\
+        \phi      &= sgn(\phi)\arccos(\phi)\\
+        \psi      &= \arcsin(r_{4x}c_{\vartheta} + r_{4z}s_{\vartheta})
+    \end{align*}
+
+    where the sign function $sgn(\phi)$ is $-1$ if $\phi < 0$, and $1$ otherwise.
+    We use the sign of $\phi$ from the previous iteration for computing $\phi$. 
+    Once again, we have problems with $\arctan2$ when $\phi$, 
+    and hence $r_{3x}$, $r_{3y}$, is near 0. But, now we also have problems 
+    with $sgn(\phi)$ giving the wrong value 
+    (i.e. when $\phi$ crosses 0 or oscillates near 0). % TODO explain more? 
+    In such cases, we compute 
+    $\phi = \arcsin(r_{3x}s_{\vartheta} - r_{3y}c_{\vartheta})$,
+     and $\vartheta = \arctan2(
+         r_{4x}s_{\phi}c_{\psi} + r_{4y}s_{\psi}, \hspace{0.2cm}
+         r_{4x}s_{\psi} - r_{4y}s_{\phi}c_{\psi} 
+     )$. 
+     Additionally, when $\psi$ is also near zero, we have aa
+     gimbal lock situation, so we keep $\vartheta$, and thus also $\phi$,
+     constant during these periods.
+
+     Earlier, we noted that a set of joint positions, in general, corresponds
+     to two possible sets of angles. The choice of $sgn(\phi)$ being $-1$ or $1$
+     at the start picks which two of these sets we first compute. Once we have 
+     a set, the set computed in the next iteration is the one consistent with
+     the previously computed set, in that the angle values do not jump discontinuously.
+     There is an exception to this: when $\vartheta$ crosses between $\pi$ and $-\pi$.
+     In this scenario, we realize that we started with the wrong set of angles,
+     and so we switch to the other set by adding or subtracting $\pi$ from $\vartheta$
+     as appropriate, and negating the other angles.
+
+
+
 
     \section{Control}
     \subsection{Forward Kinematics}
