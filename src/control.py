@@ -62,8 +62,13 @@ def get_jacobian(j1, j3, j4):
     return np.stack([first_row, second_row, third_row], axis=0)
 
 
+# intialize vanila stochastic gradient descent optimizer
+# in this case this would be equivalent to batch gradient descent
+# since we are only working with a "single sample"
+# we use this to apply the following update rule
+# theta_t+1 = theta_t - alpha * d(error)/d(theta)
+# we set alpha = 0.01
 optimizer = tf.optimizers.SGD(learning_rate=0.01)
-
 
 @tf.function(jit_compile=True)
 def solve(target_pos, j1, j3, j4):
@@ -97,7 +102,7 @@ def solve(target_pos, j1, j3, j4):
             break
 
         # apply the gradient descent update rule
-        # theta_t+1 = theta_t - alpha * d(error)/d(thetha)
+        # theta_t+1 = theta_t - alpha * d(error)/d(theta)
         # where alphais the learning rate
         optimizer.apply_gradients(zip(gradients, q))
     return {'steps': step, 'error': mean_abs_diff, 'q': q}
