@@ -185,6 +185,11 @@ class Control:
         }
 
     def open_control(self, data):
+        # we would either use the current estimated joint angles
+        # or reinitialize the join angles to the same initial 
+        # seed for each new target. We empiracally found that, 
+        # neither of those work the best. Randomly initializing
+        # the joint angles around zero, worked the best.
         self._initialize_variables()
 
         j1 = self._q['joint1']
