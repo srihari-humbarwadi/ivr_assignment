@@ -184,7 +184,7 @@ class Control:
             'joint4': get_tf_variable('joint4', np.pi / 2),
         }
 
-    def open_control(self, data):
+    def open_control(self, data, debug=False):
         # we would either use the current estimated joint angles
         # or reinitialize the join angles to the same initial 
         # seed for each new target. We empiracally found that, 
@@ -200,8 +200,10 @@ class Control:
         s = time()
         results = solve(target_pos, j1, j3, j4)
         e = time()
-        print('Reached error: {} in {} steps for target: {} in {:.3f} secs'.format(
-            np.round(results['error'].numpy(), 3), results['steps'].numpy(), target_pos.numpy(), e - s))
+
+        if debug:
+            print('Reached error: {} in {} steps for target: {} in {:.3f} secs'.format(
+                np.round(results['error'].numpy(), 3), results['steps'].numpy(), target_pos.numpy(), e - s))
 
         # publish new angles to reach the target
         joint_1_command = Float64()
