@@ -21,65 +21,6 @@ L3 = LINK_3_LENGTH
 L4 = LINK_4_LENGTH
 
 
-# def get_rotation_matrix(theta, axis):
-#     sin_theta = tf.math.sin(theta)
-#     cos_theta = tf.math.cos(theta)
-
-#     if axis == 'x':
-#         matrix = tf.convert_to_tensor([
-#             [1,          0,           0,    0],
-#             [0,    cos_theta, -sin_theta,   0],
-#             [0,    sin_theta, cos_theta,    0],
-#             [0,          0,           0,    1]])
-
-#     elif axis == 'y':
-#         matrix = tf.convert_to_tensor([
-#             [cos_theta,  0, sin_theta,      0],
-#             [0,          1,           0,    0],
-#             [-sin_theta, 0, cos_theta,      0],
-#             [0,          0,           0,    1]])
-
-#     elif axis == 'z':
-#         matrix = tf.convert_to_tensor([
-#             [cos_theta,  -sin_theta,  0,    0],
-#             [sin_theta, cos_theta,    0,    0],
-#             [0,          0,           1,    0],
-#             [0,          0,           0,    1]])
-
-#     else:
-#         raise ValueError('Invalid rotational axis')
-#     return tf.cast(matrix, dtype=tf.float32)
-
-
-# matrix multiplications are costly in tf avoid this
-
-# def FK(j1, j3, j4):
-#     j1 = tf.clip_by_value(j1, -np.pi, np.pi)
-#     j3 = tf.clip_by_value(j3, -np.pi / 2, np.pi / 2)
-#     j4 = tf.clip_by_value(j4, -np.pi / 2, np.pi / 2)
-
-#     a1_r = get_rotation_matrix(j1, 'z')
-#     a1_t = np.eye(4)
-#     a1_t[2, 3] = LINK_1_LENGTH
-#     a1_t = tf.constant(a1_t, dtype=tf.float32)
-#     a1 = tf.matmul(a1_r, a1_t)
-
-#     a3_r = get_rotation_matrix(j3, 'x')
-#     a3_t = np.eye(4)
-#     a3_t[2, 3] = LINK_3_LENGTH
-#     a3_t = tf.constant(a3_t, dtype=tf.float32)
-#     a3 = tf.matmul(a3_r, a3_t)
-
-#     a4_r = get_rotation_matrix(j4, 'y')
-#     a4_t = np.eye(4)
-#     a4_t[2, 3] = LINK_4_LENGTH
-#     a4_t = tf.constant(a4_t, dtype=tf.float32)
-#     a4 = tf.matmul(a4_r, a4_t)
-
-#     a = tf.matmul(a1, tf.matmul(a3, a4))
-#     xyz = a[:3, 3]
-#     return xyz
-
 def s(a):
     return tf.math.sin(a)
 
