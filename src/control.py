@@ -117,24 +117,42 @@ def get_jacobian(j1, j3, j4):
     return np.stack([first_row, second_row, third_row], axis=0)
 
 
-def error_fn(true, pred):
-    error = tf.losses.mse(true, pred)
-    return error
-
 optimizer = tf.optimizers.SGD(learning_rate=0.01)
 
 @tf.function(jit_compile=True)
-def solve(target, j1, j3, j4):
+def solve(target_pos, j1, j3, j4):
     q = [j1, j3, j4]
+
+    # compiled tf graph requires us to initialize all outputs
     error = tf.constant(0.0)
+
+    # run gradient descent for 500 steps 
+    # (in most of the cases we find a solution within 100 steps)
     for step in tf.range(1, 501):
         with tf.GradientTape() as tape:
-            x = FK(j1, j3, j4)
-            error = error_fn(target, x)
+            # compute current position of the 
+            # end effector using forward kinematics
+            current_pos = FK(j1, j3, j4)
+
+            # compute mean squared error of the current
+            # and target positions of the end effector
+            error = tf.reduce_mean((target_pos - current_pos) ** 2)
+
+            # Use automatic differentiation to compute 
+            # gradients d(error)/dq. Since we are using
+            # forward kinematics to compute the current
+            # position, we can show that the gradients 
+            # can be expressed in terms of the Jacobian matrix.
             gradients = tape.gradient(error, q)
-        mean_abs_diff = tf.reduce_mean(tf.abs(x - target))
+
+        # exit optimization when error drop to a very low value
+        mean_abs_diff = tf.reduce_mean(tf.abs(current_pos - target_pos))
         if mean_abs_diff < 0.005:
             break
+
+        # apply the gradient descent update rule
+        # theta_t+1 = theta_t - alpha * d(error)/d(thetha)
+        # where alphais the learning rate
         optimizer.apply_gradients(zip(gradients, q))
     return {'steps': step, 'error': mean_abs_diff, 'q': q}
 
@@ -177,8 +195,8 @@ class Control:
         s = time()
         results = solve(target_pos, j1, j3, j4)
         e = time()
-        print('Reached error: {:3f} in {} steps for target: {} in {:.3f} secs'.format(
-            results['error'].numpy(), results['steps'].numpy(), target_pos.numpy(), e - s))
+        print('Reached error: {} in {} steps for target: {} in {:.3f} secs'.format(
+            np.round(results['error'].numpy(), 3), results['steps'].numpy(), target_pos.numpy(), e - s))
 
         # publish new angles to reach the target
         joint_1_command = Float64()
