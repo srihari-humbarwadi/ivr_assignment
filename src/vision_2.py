@@ -10,7 +10,6 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge
 
-PIXEL_TO_METRE = 0.039
 
 NEARNESS_CONSTANT = 0.3
 
