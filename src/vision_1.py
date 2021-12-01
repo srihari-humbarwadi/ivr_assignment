@@ -48,6 +48,20 @@ def approximate_with_data(ys):
     return approximator
 
 
+def normalize_image(image):
+    image = image / 255
+    b, g, r = np.split(image, 3, axis=-1)
+    scale = (b + g + r) + 1e-6
+    return np.uint8(255 * image / scale)
+
+
+def mask_background(image):
+    foreground_mask = np.expand_dims(~np.logical_and(
+        image[:, :, 0] == image[:, :, 1],
+        image[:, :, 1] == image[:, :, 2]),
+        axis=-1)
+    return image * foreground_mask
+
 class Link:
     """ Model the link as a vector from joint1 to joint2 """
     def __init__(self, joint_1, joint_2):
@@ -177,7 +191,9 @@ class vision_1:
 
     def detect_centres(self, data, camera, dump_frames=True, output_dir='frames'):
         # read image
-        cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        raw_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        normalized_image = normalize_image(raw_image)
+        cv_image = mask_background(normalized_image)
 
         if dump_frames:
             frame_count = self._updates['camera_{}'.format(camera)]
