@@ -199,8 +199,8 @@ class vision_2:
             area = moments[i]['m00']
             if area < self.obstruct_thres:
                 continue
-            vertical = int(moments[i]['m01'] / area)
-            horizontal = int(moments[i]['m10'] / area)
+            vertical = moments[i]['m01'] / area
+            horizontal = moments[i]['m10'] / area
 
             self.joints[i].z = vertical
             if camera == 1:
