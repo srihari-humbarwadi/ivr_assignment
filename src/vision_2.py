@@ -11,6 +11,8 @@ from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge
 
 
+PIXEL_TO_METER = 0.037
+
 NEARNESS_CONSTANT = 0.3
 
 
@@ -321,9 +323,9 @@ class vision_2:
     def debug(self):
         end_eff_pos = Float64MultiArray()
         end_eff_pos.data = [
-            PIXEL_TO_METRE * (self.red.x - self.green.x),
-            PIXEL_TO_METRE * (self.red.y - self.green.y),
-            PIXEL_TO_METRE * (self.green.z - self.red.z)
+            PIXEL_TO_METER * (self.red.x - self.green.x),
+            PIXEL_TO_METER * (self.red.y - self.green.y),
+            PIXEL_TO_METER * (self.green.z - self.red.z)
         ]
         self.end_effector_pos.publish(end_eff_pos)
         return
