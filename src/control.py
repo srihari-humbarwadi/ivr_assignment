@@ -103,7 +103,7 @@ def solve(target_pos, j1, j3, j4):
 
         # exit optimization when error drop to a very low value
         mean_abs_diff = tf.reduce_max(tf.abs(current_pos - target_pos))
-        if mean_abs_diff < 0.0005:
+        if mean_abs_diff < 0.005:
             break
 
         # apply the gradient descent update rule
@@ -145,9 +145,9 @@ class Control:
 
     def _initialize_variables(self):
         self._q = {
-            'joint1': get_tf_variable('joint1', clip=np.pi, mean=0, stddev=0.01),
-            'joint3': get_tf_variable('joint3', clip=np.pi / 2, mean=0, stddev=0.01),
-            'joint4': get_tf_variable('joint4', clip=np.pi / 2, mean=0, stddev=0.01),
+            'joint1': get_tf_variable('joint1', clip=np.pi, mean=0, stddev=0.005),
+            'joint3': get_tf_variable('joint3', clip=np.pi / 2, mean=0, stddev=0.005),
+            'joint4': get_tf_variable('joint4', clip=np.pi / 2, mean=0, stddev=0.005),
         }
 
     def open_control(self, data, debug=False):
