@@ -227,8 +227,8 @@ class vision_1:
                 self.joints[i].obstructed = True
                 continue
             self.joints[i].obstructed = False
-            vertical = int(moments[i]['m01'] / area)
-            horizontal = int(moments[i]['m10'] / area)
+            vertical = moments[i]['m01'] / area
+            horizontal = moments[i]['m10'] / area
 
             self.joints[i].z = vertical
             if camera == 1:
