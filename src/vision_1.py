@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import rospy
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, Float64
 from std_msgs.msg import Float64MultiArray
 
 
@@ -119,6 +119,14 @@ class vision_1:
             '/camera1/robot/image_raw', Image, self.callback_1)
         self.image_2_sub = rospy.Subscriber(
             '/camera2/robot/image_raw', Image, self.callback_2)
+
+        self.joint_2_pub = rospy.Publisher(
+            'joint_angle_2', Float64, queue_size=20)
+        self.joint_3_pub = rospy.Publisher(
+            'joint_angle_3', Float64, queue_size=20)
+        self.joint_4_pub = rospy.Publisher(
+            'joint_angle_4', Float64, queue_size=20)
+
         self.joints_est_1_pub = rospy.Publisher(
             "joints_est_1", Float64MultiArray, queue_size=10)
         self.bridge = CvBridge()
@@ -255,10 +263,18 @@ class vision_1:
             self.avg_joints[i].angle = total_angle / self.avg_window_size
 
     def publish_angles(self):
-        joints_est = Float64MultiArray()
-        joints_est.data = [self.green.angle,
-                           self.yel1.angle, self.yel2.angle, self.blue.angle]
-        self.joints_est_1_pub.publish(joints_est)
+        joint_2 = Float64()
+        joint_2.data = self.yel1.angle
+
+        joint_3 = Float64()
+        joint_3.data = self.yel2.angle
+
+        joint_4 = Float64()
+        joint_4.data = self.blue.angle
+
+        self.joint_2_pub.publish(joint_2)
+        self.joint_3_pub.publish(joint_3)
+        self.joint_4_pub.publish(joint_4)
 
     def update_angles(self):
         # calculate angles via trigonometry and linear algebra
