@@ -10,8 +10,22 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray
 
 
-_PIXEL_TO_METER = 0.039
+_PIXEL_TO_METER = 0.037
 
+
+def normalize_image(image):
+    image = image / 255
+    b, g, r = np.split(image, 3, axis=-1)
+    scale = (b + g + r) + 1e-6
+    return np.uint8(255 * image / scale)
+
+
+def mask_background(image):
+    foreground_mask = np.expand_dims(~np.logical_and(
+        image[:, :, 0] == image[:, :, 1],
+        image[:, :, 1] == image[:, :, 2]),
+        axis=-1)
+    return image * foreground_mask
 
 class Joint:
     _COLOR_RANGES = {
@@ -41,6 +55,9 @@ class Joint:
 
 
     def update_coordinates(self, image, camera, kernel=None, iterations=3):
+        image = normalize_image(image)
+        image = mask_background(image)
+
         blob_mask = cv2.inRange(image, *Joint._COLOR_RANGES[self._color])
 
         if kernel is None:
