@@ -32,6 +32,10 @@ def c(a):
 
 
 def FK(j1, j3, j4):
+    j1 = tf.clip_by_value(j1, -np.pi, np.pi)    
+    j3 = tf.clip_by_value(j3, -np.pi / 2, np.pi / 2)
+    j4 = tf.clip_by_value(j4, -np.pi / 2, np.pi / 2)    
+
     x = c(j1)*s(j4)*L4 + s(j1)*s(j3)*c(j4)*L4 + s(j1)*s(j3)*L3
     y = s(j1)*s(j4)*L4 - c(j1)*s(j3)*c(j4)*L4 - c(j1)*s(j3)*L3
     z = c(j3)*c(j4)*L4 + c(j3)*L3 + L1
@@ -87,7 +91,7 @@ def solve(target_pos, j1, j3, j4):
 
             # compute mean squared error of the current
             # and target positions of the end effector
-            error = tf.reduce_mean((target_pos - current_pos) ** 2)
+            error = tf.reduce_mean(tf.square(target_pos - current_pos))
 
             # Use automatic differentiation to compute
             # gradients d(error)/dq. Since we are using
@@ -97,7 +101,7 @@ def solve(target_pos, j1, j3, j4):
             gradients = tape.gradient(error, q)
 
         # exit optimization when error drop to a very low value
-        mean_abs_diff = tf.reduce_mean(tf.abs(current_pos - target_pos))
+        mean_abs_diff = tf.reduce_max(tf.abs(current_pos - target_pos))
         if mean_abs_diff < 0.005:
             break
 
@@ -105,12 +109,19 @@ def solve(target_pos, j1, j3, j4):
         # theta_t+1 = theta_t - alpha * d(error)/d(theta)
         # where alphais the learning rate
         optimizer.apply_gradients(zip(gradients, q))
-    return {'steps': step, 'error': mean_abs_diff, 'q': q}
+    return {
+        'steps': step, 
+        'current_pos': current_pos, 
+        'error': mean_abs_diff, 
+        'q': q}
 
 
-def get_tf_variable(name, clip):
-    value = np.random.normal(0, 0.005 * clip)
-    return tf.Variable(value, name=name, dtype=tf.float32)
+def get_tf_variable(name, clip, mean=0, stddev=1.0):
+    return tf.Variable(
+        initial_value=np.random.normal(loc=mean, scale=stddev),
+        constraint=lambda x: tf.clip_by_value(x, -clip, clip), 
+        name=name,
+        dtype=tf.float32)
 
 
 class Control:
@@ -133,9 +144,9 @@ class Control:
 
     def _initialize_variables(self):
         self._q = {
-            'joint1': get_tf_variable('joint1', np.pi / 4),
-            'joint3': get_tf_variable('joint3', np.pi / 2),
-            'joint4': get_tf_variable('joint4', np.pi / 2),
+            'joint1': get_tf_variable('joint1', clip=np.pi, mean=0, stddev=0.01),
+            'joint3': get_tf_variable('joint3', clip=np.pi / 2, mean=0, stddev=0.01),
+            'joint4': get_tf_variable('joint4', clip=np.pi / 2, mean=0, stddev=0.01),
         }
 
     def open_control(self, data, debug=False):
@@ -144,7 +155,7 @@ class Control:
         # seed for each new target. We empiracally found that,
         # neither of those work the best. Randomly initializing
         # the joint angles around zero, worked the best.
-        self._initialize_variables()
+        # self._initialize_variables()
 
         j1 = self._q['joint1']
         j3 = self._q['joint3']
@@ -156,8 +167,19 @@ class Control:
         e = time()
 
         if debug:
+            print('Reached error: {} in {} steps for target: {} with position: {} and joint config: {} in {:.3f} secs'.format(
+                np.round(results['error'].numpy(), 3),
+                results['steps'].numpy(),
+                target_pos.numpy(),
+                results['current_pos'].numpy(),
+                [j1.numpy(), j3.numpy(), j4.numpy()],
+                e - s))
+        else:
             print('Reached error: {} in {} steps for target: {} in {:.3f} secs'.format(
-                np.round(results['error'].numpy(), 3), results['steps'].numpy(), target_pos.numpy(), e - s))
+                np.round(results['error'].numpy(), 3),
+                results['steps'].numpy(),
+                target_pos.numpy(),
+                e - s))
 
         # publish new angles to reach the target
         joint_1_command = Float64()
