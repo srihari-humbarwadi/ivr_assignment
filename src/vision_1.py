@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 import rospy
 from cv_bridge import CvBridge
-from sensor_msgs.msg import Image, Float64
-from std_msgs.msg import Float64MultiArray
+from sensor_msgs.msg import Image
+from std_msgs.msg import Float64MultiArray, Float64
 
 
 NEARNESS_CONSTANT = 0.4
@@ -293,8 +293,8 @@ class vision_1:
             prod_cos = np.cos(self.yel2.angle)*np.cos(self.blue.angle)
             blue_sin = np.sin(self.blue.angle)
             yel1_sin = (prod_cos*link_4_x - blue_sin*link_4_z)
-            yel2_cos = (blue_sin*link_4_x + prod_cos*link_4_z)
-            yel1_angle = np.arctan2(yel1_sin, yel2_cos)
+            yel1_cos = (blue_sin*link_4_x + prod_cos*link_4_z)
+            yel1_angle = np.arctan2(yel1_sin, yel1_cos)
             self.yel1.angle = np.clip(yel1_angle, -np.pi/2, np.pi/2)
 
         # update joint 4's angle
