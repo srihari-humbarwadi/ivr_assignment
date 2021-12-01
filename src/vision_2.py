@@ -172,15 +172,11 @@ class vision_2:
         self.update_angles()
         self.publish_angles()
 
-        self.debug()  # TODO: remove
-
     # handle images seen from the camera facing the xz-plane
     def callback_2(self, data):
         self.detect_centres(data, 2)
         self.update_angles()
         self.publish_angles()
-
-        self.debug()  # TODO: remove
 
     def detect_centres(self, data, camera):
         # read image
@@ -318,17 +314,6 @@ class vision_2:
         self.green.angle = green_ang
         self.yel2.angle = yel2_ang
         self.blue.angle = blue_ang
-
-    def debug(self):
-        end_eff_pos = Float64MultiArray()
-        end_eff_pos.data = [
-            PIXEL_TO_METRE * (self.red.x - self.green.x),
-            PIXEL_TO_METRE * (self.red.y - self.green.y),
-            PIXEL_TO_METRE * (self.green.z - self.red.z)
-        ]
-        self.end_effector_pos.publish(end_eff_pos)
-        return
-
 
 def main(args):
     _ = vision_2()
