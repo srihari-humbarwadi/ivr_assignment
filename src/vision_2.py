@@ -31,6 +31,20 @@ def closer_to(val, x, y):
         return y
 
 
+def normalize_image(image):
+    image = image / 255
+    b, g, r = np.split(image, 3, axis=-1)
+    scale = (b + g + r) + 1e-6
+    return np.uint8(255 * image / scale)
+
+
+def mask_background(image):
+    foreground_mask = np.expand_dims(~np.logical_and(
+        image[:, :, 0] == image[:, :, 1],
+        image[:, :, 1] == image[:, :, 2]),
+        axis=-1)
+    return image * foreground_mask
+
 class Link:
     """ Model the link as a vector from joint1 to joint2 """
 
@@ -164,7 +178,9 @@ class vision_2:
 
     def detect_centres(self, data, camera):
         # read image
-        cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        raw_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        normalized_image = normalize_image(raw_image)
+        cv_image = mask_background(normalized_image)
 
         # highlight blobs
         joints_images = [
