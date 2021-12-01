@@ -89,9 +89,10 @@ def solve(target_pos, j1, j3, j4):
             # end effector using forward kinematics
             current_pos = FK(j1, j3, j4)
 
-            # compute mean squared error of the current
-            # and target positions of the end effector
-            error = tf.reduce_mean(tf.square(target_pos - current_pos))
+            # compute mean squared error of the current and
+            # target positions of the end effector given by
+            # error = mean((target_pos - current_pos) ** 2)
+            error = tf.losses.mse(target_pos, current_pos)
 
             # Use automatic differentiation to compute
             # gradients d(error)/dq. Since we are using
@@ -102,7 +103,7 @@ def solve(target_pos, j1, j3, j4):
 
         # exit optimization when error drop to a very low value
         mean_abs_diff = tf.reduce_max(tf.abs(current_pos - target_pos))
-        if mean_abs_diff < 0.005:
+        if mean_abs_diff < 0.0005:
             break
 
         # apply the gradient descent update rule
@@ -155,7 +156,7 @@ class Control:
         # seed for each new target. We empiracally found that,
         # neither of those work the best. Randomly initializing
         # the joint angles around zero, worked the best.
-        # self._initialize_variables()
+        self._initialize_variables()
 
         j1 = self._q['joint1']
         j3 = self._q['joint3']
