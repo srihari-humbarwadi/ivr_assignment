@@ -86,22 +86,23 @@ class Link:
 
 class Joint:
     """ Abstraction for joints """
-    def __init__(self, colour_name, colour_range):
+    _COLOR_RANGES = {
+        'red':    [(0, 0, 100),   (50, 50, 255)],
+        'green':  [(0, 100, 0),   (50, 255, 50)],
+        'blue':   [(100, 0, 0),   (255, 50, 50)],
+        'yellow': [(0, 100, 100), (50, 255, 255)],
+    }
+
+    def __init__(self, colour_name):
         self.x = 0
         self.y = 0
         self.z = 0
         self.angle = 0
-        self.obstructed = False
         self.colour_name = colour_name
-        self.colour_range = colour_range
-
-        # when not None, used to approximate angles when blobs are obstructed or too close together
-        self.approximator = None
-        # argument to be passed to the approximator
-        self.approx_arg = 0
+        self.colour_range = Joint._COLOR_RANGES[colour_name]
 
     def copy(self):
-        copy = Joint(self.colour_name, self.colour_range)
+        copy = Joint(self.colour_name)
         copy.x = self.x
         copy.y = self.y
         copy.z = self.z
@@ -141,11 +142,11 @@ class vision_1:
         self.obstruct_thres = 1000
 
         # declare joints and their (range of) colours (for opencv thresholding)
-        self.green = Joint('green',  [(0, 100, 0),   (10, 255, 10)])
-        self.yel1 = Joint('yellow', [(0, 100, 100), (10, 255, 255)])
-        self.yel2 = Joint('yellow', [(0, 100, 100), (10, 255, 255)])
-        self.blue = Joint('blue',   [(100, 0, 0),   (255, 10, 10)])
-        self.red = Joint('red',    [(0, 0, 100),   (10, 10, 255)])
+        self.green = Joint('green')
+        self.yel1 = Joint('yellow')
+        self.yel2 = Joint('yellow')
+        self.blue = Joint('blue')
+        self.red = Joint('red')
         self.joints = [self.green, self.yel1, self.yel2,
                        self.blue, self.red]  # index 1-off from pdf
 
