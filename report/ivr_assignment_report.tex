@@ -1,64 +1,66 @@
 \documentclass[11pt, a4paper]{article}
 \usepackage[utf8]{inputenc} 
 \usepackage{geometry}
-% accepted settings from Piazza 165
+% accepted settings adapted from Piazza 165
 % https://piazza.com/class/ktif0r0f1kg54i?cid=165
-\geometry{a4paper, total={170mm,257mm}, left=20mm, top=20mm}
-% old settings
-%\usepackage[margin=1in]{geometry}
-%\renewcommand{\linespread}{1.0}
+\geometry{a4paper, total={170mm,257mm}, left=10mm, top=10mm, right=10mm}
 \usepackage{amsmath}
+\usepackage{float}
+\usepackage{multicol}
+\usepackage{graphicx}
+\graphicspath{{./}}
+
+\usepackage[
+backend=biber,
+style=numeric,
+sorting=none
+]{biblatex}
+\addbibresource{./references.bib}
 
 
 \title{IVR Assignment Report}
-\author{Humbarwadi Srihari and Thanakrit Anutrakulchai}
+\author{Srihari Humbarwadi and Thanakrit Anutrakulchai}
 
 \begin{document}
     \maketitle
     \section{Contributions}
+    For the vision part (both files), Thanakrit worked on deriving formulae for joint angles from detected blob positions. Srihari worked on image normalization, background masking for blob detection, correcting for bias, and helped simplify the calculations above.
+    For the Forward Kinematics, Inverse Kinematics part, We both calculated the forward kinematics and Jacobian matrices by hand. Thanakrit populated the D-H table, as well as the table comparing measured x, y, z positions to those derived from Forward Kinematics and helped with the gradient calculation. Srihari worked on designing the optimization and error function for Inverse kinematics solution and helped computing and reporting error in Forward Kinematics. 
 
-
+\noindent \textbf{repository}: \url{https://github.com/srihari-humbarwadi/ivr_assignment}
+    
 
     \section{Notation}
-    For this report, we use the symbols
-    $\vartheta$, $\nu$, $\phi$, $\psi$ to denote the value in radians of the angles 
-    of joints 1, 2, 3, and 4, respectively. 
-    We denote the position in 3D space of the $i^{th}$ joint with symbols
+    For this report, we use
+    $\vartheta$, $\nu$, $\phi$, $\psi$ to denote the angles in radians of joints 1, 2, 3, and 4, respectively. 
+    We denote the position of the $i^{th}$ joint with
     $x_i$, $y_i$, $z_i$, and $x_e$, $y_e$, $z_e$ for the position of the end-effector,
-    from any arbitrary left-handeded co-ordinate frame.
-    % TODO is this true? %
-    (We only use the difference between these values so the position of the frame
+    from any arbitrary left-handed co-ordinate frame.
+    (We only use the differences between values so the position of the frame
     does not matter. We choose a left-hand frame as that made getting positional data
     from the cameras more straightforward.)
-    We also use the symbols $L_1$, $L_2$, $L_3$, $L_4$ for the
+    We also use $L_1$, $L_2$, $L_3$, $L_4$ for the
     lengths of the respective links. 
     We use short-hand notation for sine and cosine,
     as in $s_{\gamma}$ is to be read as $\sin(\gamma)$ and $c_{\gamma}$
-    is to be read as $\cos(\gamma)$ for angles $\gamma$.
+    as $\cos(\gamma)$ for angles $\gamma$.
     
 
 
 
     \section{Joint State Estimation}
     \subsection{Part I \textemdash Fixing Joint 1}
-    To calculate the angles of the joints, we first use blob detection to
-    find where the joints are in 3D space. % TODO Elaborate?
-    We use thresholding to filter out the positions of the green,
-    yellow, blue, and red blobs which correspond to joints 1, 2, 3, 4 and 
-    the end-effector, respectively. As we have two cameras, one facing
+    To calculate the angles of the joints, we need to localize the joints in 3D space. We first normalize the image using \textit{RGB} normalization, then mask the background and the links between the joint. This ensures that our resultant image only has joint spheres present. We use thresholding to generate binary masks of the green, yellow, blue, and red spheres which correspond to joints 1, 2, 3, 4 and 
+    the end-effector respectively. As we have two cameras, one facing
     the yz-plane, and the other facing the xz-plane, we perform this
     operation on the images received from both camera, and combine their
-    results. % TODO Elaborate? %
+    results. Thus, we use \textit{camera 1} to localize the blobs in \textit{yz} plane and use \textit{camera 2} to localize the blobs in \textit{xz} plane.
 
-    Once we have the necessary joints positions, we then consider the
-    orientation of the links between them, specifically link 3 and link 4.
-    To do so, we calculate unit-length vectors $\textbf{r}_3(\textbf{q})$,
-    $\textbf{r}_4(\textbf{q})$ pointing from the center of
-    joint 2 to joint 3, and joint 3 to joint 4, respectively. We choose
-    two right-handed co-ordinate frames positioned at the base of the vectors
-    so when all joints are at angle 0, the unit vectors have co-ordinates
-    [0 0 1] in those frames.  
-    These vectors are rotated as the joint angles change as so: % TODO explain? %
+    We encode the orientations of links 3 and 4 by
+    the unit-length vectors $\textbf{r}_3(\textbf{q})$,
+    $\textbf{r}_4(\textbf{q})$ pointing from
+    joint 2 to 3, and joint 3 to 4, respectively. We choose two frames so when all joints are at angle 0, the unit vectors have co-ordinates [0 0 1] in those frames.  
+    These vectors are rotated as the joint angles change as so:
 
 
     $$
@@ -72,7 +74,7 @@
         c_{\phi}s_{\nu}\\
        -s_{\phi}\\
         c_{\phi}c_{\nu}
-    \end{pmatrix} = \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
+    \end{pmatrix} \approx \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
     \begin{pmatrix}
         x_4 - x_3\\
         y_4 - y_3\\
@@ -91,7 +93,7 @@
         c_{\nu}s_{\psi} + s_{\nu}c_{\phi}c_{\psi}\\
        -s_{\phi}c_{\psi}\\
        -s_{\nu}s_{\psi} + c_{\nu}c_{\phi}c_{\psi}
-    \end{pmatrix} = \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
+    \end{pmatrix} \approx \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
     \begin{pmatrix}
         x_e - x_4\\
         y_e - y_4\\
@@ -99,38 +101,49 @@
     \end{pmatrix}
     $$
 
-    The formulae above can be derived from geometry (e.g. as in the derivation
-    of the spherical co-ordinates in SVCDE) or from multiplying the relevant
-    rotation matrices to transform co-ordinate frames (translations are unnecessary
-    as we are only concerned with orientation). Note that we negate the z component
+    The formulae above can be derived from geometry or multiplying the relevant
+    rotation matrices. We negate the z component
     as we switch from a left-handed frame to right-handed frames.
 
     With these values, we can calculate the joint angles as so:
     \begin{align*}
-        \nu  &= \arctan2(r_{3x}, r_{3z})\\
+        \nu  &= \arctan2(r_{3x}, r_{3z}) &|| &\nu = \arctan2(r_{4x}c_{\phi}c_{\psi} - r_{4z}s_{\psi}, \hspace{0.2cm}
+                    r_{4x}s_{\psi} + r_{4z}c_{\phi}c_{\psi}
+    )\\
         \phi &= \arcsin(-r_{3y})\\
         \psi &= \arcsin(r_{4x}c_{\nu} - r_{4z}s_{\nu})
     \end{align*}
 
-    where we calculate $\nu$ before $\psi$. 
-    However, when $\phi$ is near $\pm\frac{\pi}{2}$, 
-    $r_{3x}$ and $r_{3z}$ are near zero, so $\arctan2(r_{3x}, r_{3z})$
-    oscillates quickly and rapidly over a short time. % TODO explain why?
-    In such a case, we switch to calculating 
-    $\nu = \arctan2(r_{4x}c_{\phi}c_{\psi} - r_{4z}s_{\psi}, \hspace{0.2cm}
-                    r_{4x}s_{\psi} + r_{4z}c_{\phi}c_{\psi}
-    )$, where we use the value of $\psi$ computed from the last iteration.
-    Additionally, when $\psi$ is near $0$, as well, we stop calculating
-    $\nu$ and keep the angle published constant. This is because we have
-    a gimbal lock situation, any value of $\nu$ will produce the same observed
-    set of positions, so we have no information on what $\nu$ can be, except
-    that it cannot physically change from its previous value too much.
+    where we only use the right-hand formula for $\nu$ when $\phi$ $\approx$ $\pm\frac{\pi}{2}$, 
+    $r_{3x}$, $r_{3z}$ $\approx$ $0$, so $\arctan2(r_{3x}, r_{3z})$ oscillates rapidly.
+    Additionally, when $\psi$ $\approx$ $0$ also, we stop calculating
+    $\nu$ and keep the angle published constant. As we have
+    a gimbal lock situation, any value of $\nu$ produces the same observed
+    positions, so our only information on $\nu$ is
+    it cannot physically change from its previous value too much.
+    
+    \begin{center}
+        \includegraphics[scale=0.255]{plots/vision_1_joint2.png}
+        \includegraphics[scale=0.255]{plots/vision_1_joint3.png}
+        \includegraphics[scale=0.255]{plots/vision_1_joint4.png}
+    \end{center}
+
+    Graphs of estimated angles and actual angle (y-axis) vs. time (x-axis). As mentioned earlier, $\nu$ stays constant when gimbal lock occurs.
+    Joint 3's estimation undershoots due to small measurement errors \textemdash 
+    let $\epsilon_x, \epsilon_z$ be small Gaussian random variables centered at 0 approximating the
+    true value of $r_{3x}$, $r_{3z}$ $\approx$ 0 when $\phi$ $\approx$ $\pm\frac{\pi}{2}$. 
+    Then, $r_{3y}$ is calculated to be $\pm\sqrt{1 - \epsilon_x^2 - \epsilon_z^2}$, which is noticeably smaller than 1 if the measurement errors are large.
+    The estimated angle of joint 2 overshoots during peaks, while that of joint 4 undershoots,
+    as the two angles are heavily coupled when $\phi$ $\approx$ $\pm\frac{\pi}{2}$.
+    The lines of the estimated angles oscillate, due to using z-coordinate data from both cameras, 
+    and not correcting for when the distance from the joints to the cameras change as they move. 
+    
 
 
     \subsection{Part II \textemdash Fixing Joint 2}
-    We follow much of the same methodology from Part I, but with a slight
-    modification as most observed sets of positions of the joints now correspond
-    with two possible set of angles. We calculate the unit-vectors now as:
+    We follow the same methodology from Part I, with a slight
+    modification as most observed sets of positions now correspond
+    to two possible sets of angles. We calculate the unit-vectors now as:
     $$
     \textbf{r}_3(\textbf{q}) :=
     \begin{pmatrix}
@@ -142,7 +155,7 @@
         s_{\vartheta}s_{\phi}\\
        -c_{\vartheta}s_{\phi}\\
         c_{\phi}
-    \end{pmatrix} = \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
+    \end{pmatrix} \approx \frac{1}{\sqrt{(x_4 - x_3)^2 + (y_4 - y_3)^2 + (z_3 - z_4)^2}}
     \begin{pmatrix}
         x_4 - x_3\\
         y_4 - y_3\\
@@ -161,7 +174,7 @@
         c_{\vartheta}s_{\psi} + s_{\vartheta}s_{\phi}c_{\psi}\\
         s_{\vartheta}s_{\psi} - c_{\vartheta}s_{\phi}c_{\psi}\\
         c_{\phi}c_{\psi}
-    \end{pmatrix} = \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
+    \end{pmatrix} \approx \frac{1}{\sqrt{(x_e - x_4)^2 + (y_e - y_4)^2 + (z_4 - z_e)^2}}
     \begin{pmatrix}
         x_e - x_4\\
         y_e - y_4\\
@@ -171,44 +184,47 @@
 
     and the angles as:
     \begin{align*}
-        \vartheta &= \arctan2(r_{3x}sgn(\phi), -r_{3y}sgn(\phi))\\
-        \phi      &= sgn(\phi)\arccos(\phi)\\
+        \vartheta &= \arctan2(r_{3x}sgn(\phi), -r_{3y}sgn(\phi)) &|| &\vartheta = \arctan2(
+         r_{4x}s_{\phi}c_{\psi} + r_{4y}s_{\psi}, \hspace{0.2cm}
+         r_{4x}s_{\psi} - r_{4y}s_{\phi}c_{\psi} 
+     )\\
+        \phi      &= sgn(\phi)\arccos(\phi) &|| &\phi = \arcsin(r_{3x}s_{\vartheta} - r_{3y}c_{\vartheta})\\
         \psi      &= \arcsin(r_{4x}c_{\vartheta} + r_{4z}s_{\vartheta})
     \end{align*}
 
-    where the sign function $sgn(\phi)$ is $-1$ if $\phi < 0$, and $1$ otherwise.
-    We use the sign of $\phi$ from the previous iteration for computing $\phi$. 
-    Once again, we have problems with $\arctan2$ when $\phi$, 
-    and hence $r_{3x}$, $r_{3y}$, is near 0. But, now we also have problems 
-    with $sgn(\phi)$ giving the wrong value 
-    (i.e. when $\phi$ crosses 0 or oscillates near 0). % TODO explain more? 
-    In such cases, we compute 
-    $\phi = \arcsin(r_{3x}s_{\vartheta} - r_{3y}c_{\vartheta})$,
-     and $\vartheta = \arctan2(
-         r_{4x}s_{\phi}c_{\psi} + r_{4y}s_{\psi}, \hspace{0.2cm}
-         r_{4x}s_{\psi} - r_{4y}s_{\phi}c_{\psi} 
-     )$. 
-     Additionally, when $\psi$ is also near zero, we have aa
+    where the sign function $sgn(\phi)$ is $-1$ if $\phi < 0$ in the previous iteration, and $1$ otherwise.
+    We only use the formulae on the right-hand side when 
+    We have problems with $\arctan2$ and $sgn(\phi)$ when $\phi$, 
+    $r_{3x}$, $r_{3y}$ $\approx$ $0$.
+     Additionally, when $\psi$ is also near zero, we have a
      gimbal lock situation, so we keep $\vartheta$, and thus also $\phi$,
      constant during these periods.
 
-     Earlier, we noted that a set of joint positions, in general, corresponds
-     to two possible sets of angles. The choice of $sgn(\phi)$ being $-1$ or $1$
-     at the start picks which two of these sets we first compute. Once we have 
-     a set, the set computed in the next iteration is the one consistent with
-     the previously computed set, in that the angle values do not jump discontinuously.
-     There is an exception to this: when $\vartheta$ crosses between $\pi$ and $-\pi$.
-     In this scenario, we realize that we started with the wrong set of angles,
-     and so we switch to the other set by adding or subtracting $\pi$ from $\vartheta$
+     Earlier, we noted that most sets of positions correspond
+     to two possible sets of angles. We choose a set arbitrarily at the start and ensure
+     the angle values do not jump discontinuously.
+     There is an exception: when $\vartheta$ crosses between $\pi$ and $-\pi$,
+     we realize we started with the wrong set of angles,
+     so we switch to the other set by adding or subtracting $\pi$ from $\vartheta$
      as appropriate, and negating the other angles.
-
-
+     
+    \begin{center}     
+        \includegraphics[scale=0.245]{plots/vision_2_joint1.png}
+        \includegraphics[scale=0.245]{plots/vision_2_joint3.png}
+        \includegraphics[scale=0.255]{plots/vision_2_joint4.png}
+    \end{center}
+    Graphs of estimated angles and actual angle (y-axis) vs.  time (x-axis) 
 
 
     \section{Control}
     \subsection{Forward Kinematics}
-    We derived Forward Kinematics for the robot using the D-H convention.
+    We derived Forward Kinematics for the robot using the D-H convention. 
+    The D-H table we derived is from following the usual procedures. However, whenever the x-axis of a frame will be parallel or anti-parallel to that of the next frame, our convention is to choose
+    the x-axis of the next frame so that they are parallel. (so sometimes we use the cross product
+    $z_t \times z_{t+1}$ and sometimes $z_{t+1} \times z_t$, following this convention).
+\begin{multicols}{2}
     \begin{center}
+        \resizebox{4cm}{!}{    
         \begin{tabular}{ |c|c|c|c|c| }
             \hline
             link & $\alpha$ & a & d & $\theta$\\
@@ -219,18 +235,66 @@
             4 & 0 & $L_4$ & 0 & $\psi$\\
             \hline
         \end{tabular}
+        }
     \end{center}
-    
-
-    $$
-    K(\textbf{q}) = 
+\columnbreak
+    % \begin{center}
+    \vspace{2cm}
+        $$
+        K(\textbf{q}) = 
         \begin{pmatrix}
             c_{\vartheta}s_{\psi}L_4 + s_{\vartheta}s_{\phi}c_{\psi}L_4 + s_{\vartheta}s_{\phi}L_3\\
             s_{\vartheta}s_{\psi}L_4 - c_{\vartheta}s_{\phi}c_{\psi}L_4 - c_{\vartheta}s_{\phi}L_3\\
             c_{\phi}c_{\psi}L_4 + c_{\phi}L_3 + L_1
         \end{pmatrix}
-    $$
+        $$
+    % \end{center}
+\end{multicols}    
+    
+    To calculate $K(\textbf{q})$ from this table, please follow the exact procedure outlined in 
+    the Denavit-Hartenberg.pdf, slides 6 and 9, in the Forward Kinematics part of the
+    Video Lectures section of the IVR course's learn page.
+
+    
+
+    \begin{table}[h]
+        \begin{center}
+        \resizebox{10cm}{!}{
+        \begin{tabular}{ |c|c|c|c|c|c|c|c|c|c| }
+            \hline
+            $\vartheta$ & $\phi$ & $\psi$ & $x_e$ & $y_e$ & $z_e$ & $K_x$ & $K_y$ & $K_z$ & MSE\\ 
+            \hline
+            2.3 & 0.4 & -0.2 & 1.98 & 1.27 & 9.60 & 2.10 & 1.13 & 9.47 & 0.017 \\
+            \hline
+            -0.7 & 1.2 & 0.3 & -3.96 & -4.09 & 5.94 & -2.89 & -4.72 & 6.13 & 0.526 \\
+            \hline
+            1.1 & 1.1 & 1.1 & 4.58 & 0.69 & 5.76 & 4.68 & 0.42 & 6.03 & 0.052 \\
+            \hline
+            0.5 & -0.9 & 1.2 & 0.64 & 4.36 & 6.20 & 0.71 & 4.15 & 6.62 & 0.075 \\
+            \hline
+            -1.8 & -0.4 & -0.4 & 2.38 & 0.68 & 9.52 & 2.44 & 0.55 & 9.32 & 0.020 \\
+            \hline
+            0.6 & 1.3 & -0.7 & 1.96 & -5.76 & 4.97 & 1.42 & -5.27 & 5.43 & 0.248 \\
+            \hline
+            -2.5 & 0.5 & 1.4 & -3.38 & -0.28 & 6.46 & -3.27 & -0.24 & 7.23 & 0.202 \\
+            \hline
+            0.3 & 0.9 & -0.9 & -1.35 & -4.13 & 7.14 & -0.95 & -4.35 &  7.07 & 0.071 \\
+            \hline
+            2.7 & -1.2 & 1.3 & -4.63 & -1.71 & 4.97 & -4.01 & -2.17 & 5.43 & 0.269 \\
+            \hline
+            0.2 & 0.3 & -0.2 & -0.24 & -1.81 & 9.20 & -0.20 & -1.83 &  9.68 & 0.077 \\
+            \hline
+        \end{tabular}
+        }
+        \end{center}
+        \caption{
+            the x, y, z coordinates of the end-effector obtained from forward kinematics $K_x$, $K_y$, $K_z$, compared against the measured positions $x_e$, $y_e$, $z_e$, at different joint angle values.
+        }
+    \end{table}
+    \par One of the major contributors to the error is the \textit{pixel to meter} conversion constant, which is directly affected by the distance of the joint links from the cameras. On a average, we get an \textit{mean squared error} of \textbf{0.155} for the above configurations.
+    
     \subsection{Inverse Kinematics}
+    Jacobian calculated from Forward kinematics
     $$
     J(\textbf{q}) =
         \begin{pmatrix}
@@ -247,5 +311,40 @@
            -c_{\phi}s_{\psi}L_4\\
         \end{pmatrix}
     $$
+    
+    \par \noindent We quantify the discrepancy between the current position of the end-effector and the target using an error function. An ideal solution would be to have a \textit{zero} error, which means that our end-effector is exactly at the required target position. We formulate this as an optimization problem and try to minimize the error function. \cite{gradient_descent_ik}
+
+
+    \textbf{Error function}: Empirically we found that using mean of squared errors across the three \textit{x}, \textit{y} and \textit{z} coordinates gave us the best performance. Here \textit{target} and \textit{current} are the target coordinates and the current coordinates for the end-effector respectively.
+
+    $$
+        E(\textbf{target, current}) = \frac{1}{3} * [(x_t - x_c )^2 + (y_t - y_c )^2 + (z_t - z_c )^2]
+    $$
+    
+    \textbf{Optimization Method}: We selected a \textit{first-order} iterative optimization algorithm --- \textit{Gradient Descent} \cite{gradient_descent} to minimize our error function. We update our joint configuration \textbf{q} iteratively using the following update rule
+    $$
+        \textbf{q}_{t+1} \longleftarrow \textbf{q}_{t} - \alpha * \frac{\partial E(\textbf{target, current})}{\partial \textbf{q}}
+    $$
+    
+    Here, $\alpha$ is the step size of the update, we found that using \textit{0.01} yields the best performance. We exit the optimization process when the \textit{mean absolute error} for the coordinates drops below \textit{0.005} or when the number of iterations exceed \textit{500} iterations.
+    
+    The gradient of the error function given by $\frac{\partial E(\textbf{target, current})}{\partial \textbf{q}}$ can be expressed in terms of $J(\textbf{q})$ since the current position of the end-effector is calculated by forward kinematics given by $K(\textbf{q})$. Hence the gradient can be re-written as $\frac{2}{3}*(\textbf{target} - K(\textbf{q})) * J(\textbf{q})$
+    
+    For each new target received, we have three strategies to initialize our initial joint configuration $\textbf{q}_0$. We could start from the same initial seed configuration always, or use the previously computed solution for our next target. But, we found that randomly initializing joint configuration such that $\textbf{q}_{0} \sim  \mathcal{N}(0,\, 0.005)$ helps us avoid getting stuck in \textit{local minima(s)}.
+    
+    \textbf{Constraints}: The individual joints have constraints on the amount of rotation allowed. We make sure that our solutions is bound by these constraints.
+
+    \textbf{Joint Angle Estimations}: Since we directly evolve our solution from a random initial configuration for each new target that is published, we \textbf{do not} require any external angle estimations. We do not subscribe to any joint angle estimations from \textit{vision 2} for the same reason.
+    
+    \textbf{External Package}: To make sure that the above mentioned solution runs in real-time, we use an external package --- \textit{TensorFlow} \cite{tensorflow2015-whitepaper}, which provides primitives for efficiently computing gradients and running the \textit{Gradient Descent} update rule. We only use this package for its speed.
+
+\begin{center}
+    \includegraphics[scale=0.35]{plots/ik_coord_x.png}
+    \includegraphics[scale=0.35]{plots/ik_coord_y.png}
+    \includegraphics[scale=0.35]{plots/ik_coord_z.png}    
+\end{center}
+
+    
+\printbibliography
 
 \end{document}
